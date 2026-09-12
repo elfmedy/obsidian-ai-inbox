@@ -1,3 +1,4 @@
+import { createMenuUpdater } from './inbox-menus';
 import { ExportOptions } from '../shared/export-options';
 import { z } from 'zod';
 import { Snapshot } from '../core/schema';
@@ -167,16 +168,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
       .catch(error => reply({ ok: false, code: error instanceof ProbeError ? error.code : 'OBSIDIAN_UNAVAILABLE' })); return true;
   }
 });
-async function menus() {
-  await chrome.contextMenus.removeAll();
-  const stored = await chrome.storage.local.get('preferences');
-  const prefs = stored.preferences as { language?: string; contextMenu?: boolean } | undefined;
-  const zh = prefs?.language === 'zh' || (prefs?.language !== 'en' && chrome.i18n.getUILanguage().startsWith('zh'));
-  chrome.contextMenus.create({ id: 'settings', title: zh ? '切换仓库 / 设置' : 'Switch vault / Settings', contexts: ['action'] });
-  chrome.contextMenus.create({ id: 'status', title: zh ? '最近保存状态' : 'Last save status', contexts: ['action'] });
-  if (prefs?.contextMenu !== false) chrome.contextMenus.create({ id: 'save', title: zh ? '保存当前聊天到 Obsidian' : 'Save current chat to Obsidian',
-    contexts: ['page'], documentUrlPatterns: ['https://chatgpt.com/c/*'] });
+const updateMenus = createMenuUpdater();
+function refreshMenus() {
+  void updateMenus().catch(error => { console.warn('AI Inbox: could not rebuild context menus. Reload the extension to retry.', error); });
 }
-chrome.runtime.onInstalled.addListener(() => { void menus(); void chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }); });
-chrome.runtime.onStartup.addListener(() => { void menus(); });
-chrome.storage.onChanged.addListener(changes => { if (changes.preferences) void menus(); });
+chrome.runtime.onInstalled.addListener(() => { refreshMenus(); void chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }); });
+chrome.runtime.onStartup.addListener(refreshMenus);
+chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.preferences) refreshMenus(); });

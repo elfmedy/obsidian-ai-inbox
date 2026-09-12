@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 — 2026-09-12
+
+- Fix `Cannot create item with duplicate id settings` when installation, startup, and preference changes overlap.
+- Serialize complete menu rebuilds, await native creation callbacks, and handle `runtime.lastError`. Use callback-based removal for Chrome 120 compatibility.
+- Limit preference-triggered refreshes to local extension settings and allow subsequent rebuilds after a failed attempt.
+
+Validation: 179 tests passed. A controlled native Chrome regression reproduced 26 duplicate errors on the packaged 0.3.0 extension; the same event burst produced zero errors on the fix and retained the latest language/context-menu preferences. No chat or Vault was accessed by this regression. Chrome 0.3.1 remains compatible with the Obsidian 0.3.0 plugin.
+
 ## 0.3.0 — 2026-09-12
 
 - Add per-Vault thinking export (off by default), using collapsed callouts for recognized ChatGPT thinking summaries and activities.
