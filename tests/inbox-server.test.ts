@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { InboxWriter, type VaultStore } from '../spikes/core/writer';
-import { startInboxServer } from '../spikes/transport/inbox-server';
-import { ProbeError } from '../spikes/shared/errors';
+import { InboxWriter, type VaultStore } from '../src/core/writer';
+import { startInboxServer } from '../src/transport/inbox-server';
+import { ProbeError } from '../src/shared/errors';
 import { request as httpRequest } from 'node:http';
 describe('alpha loopback protocol', () => {
   it('checks origin, host, token and vault before writing, and supports idempotent receipts', async () => {

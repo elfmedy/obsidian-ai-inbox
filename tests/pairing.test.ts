@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PairingSessions } from '../spikes/transport/pairing';
+import { PairingSessions } from '../src/transport/pairing';
 const request = { clientId: 'a'.repeat(32), secret: 'b'.repeat(64) };
 const origin = `chrome-extension://${request.clientId}`;
 describe('explicit, expiring browser pairing', () => {

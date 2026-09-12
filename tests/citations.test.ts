@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { expandCitations, readReferences } from '../spikes/render/citations';
-import { localizeMarkdown } from '../spikes/render/markdown';
+import { expandCitations, readReferences } from '../src/render/citations';
+import { localizeMarkdown } from '../src/render/markdown';
 describe('upstream citation conversion', () => {
   const marker = '\uE200cite\uE202turn0search0\uE201';
   const refs = readReferences({ content_references: [{ type: 'webpage', matched_text: marker, items: [{ title: 'Paper', url: 'https://example.org/paper' }] }] });

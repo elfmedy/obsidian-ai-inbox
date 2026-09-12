@@ -1,6 +1,6 @@
 {
-  "name": "ai-inbox",
-  "version": "0.3.1",
+  "name": "obsidian-ai-inbox",
+  "version": "0.4.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -8,17 +8,14 @@
     "node": ">=24.0.0 <25"
   },
   "scripts": {
-    "lint": "eslint spikes --max-warnings 0",
+    "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:p0": "node scripts/build-p0.mjs",
-    "build:alpha": "node scripts/build-alpha.mjs",
-    "prepare:p0": "npm run build:p0 && node scripts/prepare-p0-vault.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build:p0 && node scripts/check-package.mjs && npm run build:alpha && node scripts/check-alpha.mjs",
-    "build": "npm run build:alpha"
+    "build": "node scripts/build.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && node scripts/check-package.mjs",
+    "package": "npm run check && python scripts/package.py"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.0",
     "@types/node": "^22.0.0",
     "esbuild": "0.28.2",
     "eslint": "^9.39.4",
@@ -34,5 +31,6 @@
     "micromark-extension-gfm": "3.0.0",
     "micromark-extension-math": "3.1.0",
     "zod": "4.6.2"
-  }
+  },
+  "description": "Receive ChatGPT conversations as editable Obsidian notes."
 }

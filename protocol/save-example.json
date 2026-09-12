@@ -1,0 +1,40 @@
+{
+  "request": {
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "expectedRevision": 0,
+    "exportOptions": {
+      "includeThinking": false,
+      "includeTitle": false,
+      "language": "en"
+    },
+    "snapshot": {
+      "schemaVersion": 1,
+      "conversationId": "example",
+      "sourceUrl": "https://chatgpt.com/c/example",
+      "title": "Example",
+      "capturedAt": "2026-09-12T00:00:00.000Z",
+      "messages": [
+        {
+          "id": "message",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "An example conversation."
+            }
+          ]
+        }
+      ],
+      "assets": []
+    }
+  },
+  "receipt": {
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "action": "created",
+    "path": "AI Inbox/Example.md",
+    "noteId": "00000000-0000-4000-8000-000000000002",
+    "revision": 1,
+    "messages": 1,
+    "images": 0
+  }
+}

@@ -1,33 +1,19 @@
 # Changelog
 
-## 0.3.1 — 2026-09-12
+## 0.4.0
 
-- Fix `Cannot create item with duplicate id settings` when installation, startup, and preference changes overlap.
-- Serialize complete menu rebuilds, await native creation callbacks, and handle `runtime.lastError`. Use callback-based removal for Chrome 120 compatibility.
-- Limit preference-triggered refreshes to local extension settings and allow subsequent rebuilds after a failed attempt.
+- Separate Obsidian and browser releases, with independent builds and compatibility checks.
+- New English and Chinese product pages and user guides.
+- Keep existing note protection, attachments, settings, pairing, and BRAT identity.
 
-Validation: 179 tests passed. A controlled native Chrome regression reproduced 26 duplicate errors on the packaged 0.3.0 extension; the same event burst produced zero errors on the fix and retained the latest language/context-menu preferences. No chat or Vault was accessed by this regression. Chrome 0.3.1 remains compatible with the Obsidian 0.3.0 plugin.
+## 0.3.0
 
-## 0.3.0 — 2026-09-12
+- Optional thinking summaries and body titles, both off by default.
+- Follow Obsidian's language or choose English / simplified Chinese.
 
-- Add per-Vault thinking export (off by default), using collapsed callouts for recognized ChatGPT thinking summaries and activities.
-- Add a body-title option (off by default), preserving filenames and headings inside original answers.
-- Add Simplified Chinese / English plugin UI with Follow Obsidian as the default, including pairing, notices, and generated note labels.
-- Apply content settings on the next save even when source content is unchanged; preserve local edits in timestamped copies.
-- Fetch target-Vault export preferences before capture and reject stale settings before a new write. Already committed retries still return the same receipt.
-- Preserve existing credentials and writer indexes when upgrading. Both plugin and Chrome extension should be updated to 0.3.0.
+## 0.2.0
 
-Validation: 176 automated tests, official lint, strict TypeScript, deterministic packaging, synthetic ChatGPT browser / real Obsidian integration, and native language/toggle controls on Obsidian 1.13.7. The current user's real expanded-thinking sample has not been independently inspected; adapter behavior is covered with synthetic fixtures matching the pinned upstream shapes.
+- Automatic local-vault discovery, first-connection approval, and default-vault switching.
+- Save images using Obsidian's default attachment location.
 
-## 0.2.0 — 2026-09-12
-
-First public Alpha release, installable with BRAT from `elfmedy/obsidian-ai-inbox`.
-
-- Save the complete current ChatGPT conversation branch and download images to Obsidian's configured attachment location.
-- Preserve local edits by saving a new timestamped note. Update unedited notes; skip unchanged content.
-- Discover running Vaults, confirm pairing in Obsidian once, and remember or switch the default Vault.
-- Fail clearly when Obsidian or the default Vault is unavailable; no offline capture queue or automatic launch.
-- Convert supported citations to links; retain unresolved citation markers with explicit labels.
-- Redesigned Chrome toolbar icon, save feedback, and bilingual settings.
-
-Validation: 162 automated tests, official Obsidian lint, strict TypeScript, deterministic builds, license inventory, and controlled browser / real Obsidian integration. Real long conversations, generated images, and branch scenarios remain acceptance items. Desktop only; tested on Windows with Obsidian 1.13.7, minimum declared version 1.12.0.
+Earlier combined releases, including the browser-only 0.3.1 fix, remain in [Releases](https://github.com/elfmedy/obsidian-ai-inbox/releases). Browser changes continue in [browser-ai-inbox](https://github.com/elfmedy/browser-ai-inbox/releases).

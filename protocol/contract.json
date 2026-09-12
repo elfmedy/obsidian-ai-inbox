@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "pairingVersion": 1,
+  "snapshotSchemaVersion": 1,
+  "minimumCompanionVersion": "0.3.0",
+  "sha256": {
+    "src/core/schema.ts": "f687aaa24fb6a49d3a2f1b1603168931e9bb13d6bf6a4208d1d18f3a403f66e6",
+    "src/shared/export-options.ts": "1feeab1b2ff9e90405438ec616eb5ee36c607af5d2b29048b46f33ab749b9e84",
+    "src/shared/discovery.ts": "2ba786bddf42d27fcea3ab4a3408327ce71fa7a56b4ac9f3df8fcc5ed7921408",
+    "src/shared/errors.ts": "2be108fce01f541f62fc8ccdba84f20ab1dd16a6e12ebc432f172af5f658e03f"
+  }
+}

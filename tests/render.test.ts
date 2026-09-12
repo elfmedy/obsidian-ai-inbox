@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { inspectMarkdown, localizeMarkdown, canonicalizeImages } from '../spikes/render/markdown';
-import { imageManifest, renderConversation } from '../spikes/render/conversation';
-import type { GraphMessage } from '../spikes/capture/graph';
+import { inspectMarkdown, localizeMarkdown, canonicalizeImages } from '../src/render/markdown';
+import { imageManifest, renderConversation } from '../src/render/conversation';
+import type { GraphMessage } from '../src/shared/message';
 
 const textMessage = (id: string, text: string): GraphMessage => ({ id, role: 'user', parts: [{ type: 'text', text }] });
 describe('upstream Markdown parser based source preservation', () => {

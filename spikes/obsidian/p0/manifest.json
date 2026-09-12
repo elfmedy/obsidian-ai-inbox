@@ -1,9 +1,0 @@
-{
-  "id": "ai-inbox-p0",
-  "name": "AI Inbox P0",
-  "version": "0.0.1",
-  "minAppVersion": "1.12.0",
-  "description": "Isolated P0 verification of chat capture and local saving.",
-  "author": "elfmedy",
-  "isDesktopOnly": true
-}

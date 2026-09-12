@@ -1,13 +1,12 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-// Include full license text for the pinned non-dev dependency tree. The P1
-// renderer is not bundled into P0 yet; this also prepares its future packaging.
+// Include full license text for pinned runtime dependencies.
 const root = resolve(import.meta.dirname, '..');
 const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'));
 const notices = ['# Pinned npm dependency licenses', '',
   'Generated from package-lock.json; original authors retain copyright.',
-  'These dependencies support the developing content renderer. Inclusion here does not mean all are bundled into P0.', ''];
+  ''];
 for (const [directory, entry] of Object.entries(lock.packages).sort(([a], [b]) => a.localeCompare(b, 'en'))) {
   if (!directory.startsWith('node_modules/') || entry.dev) continue;
   const files = await readdir(resolve(root, directory), { withFileTypes: true });
@@ -19,4 +18,4 @@ for (const [directory, entry] of Object.entries(lock.packages).sort(([a], [b]) =
     notices.push(await readFile(resolve(root, directory, file.name), 'utf8'), '');
   }
 }
-await writeFile(resolve(root, 'third-party/npm-dependencies.txt'), notices.join('\n'));
+await writeFile(resolve(root, 'third-party/npm-dependencies.txt'), notices.join('\n').trimEnd() + '\n');

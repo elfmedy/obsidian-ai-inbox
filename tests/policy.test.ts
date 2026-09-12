@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideSave, hash, normalizeBody, replacementIfUnchanged, safeTitle, splitMarkdown, timestampName } from '../spikes/persistence/policy';
+import { decideSave, hash, normalizeBody, replacementIfUnchanged, safeTitle, splitMarkdown, timestampName } from '../src/persistence/policy';
 
 const base = { trustedTarget: true, localBody: 'body\n', baselineBodyHash: hash('body\n'), previousSourceHash: 'old', sourceHash: 'old' };
 describe('save rules', () => {

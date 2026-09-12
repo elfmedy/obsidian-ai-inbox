@@ -1,10 +1,10 @@
-import { DEFAULT_EXPORT_OPTIONS, type ExportOptionsData } from '../spikes/shared/export-options';
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptionsData } from '../src/shared/export-options';
 import { randomUUID, createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { InboxWriter, type VaultStore } from '../spikes/core/writer';
-import { type SaveRequestData } from '../spikes/core/schema';
-import { ProbeError } from '../spikes/shared/errors';
-import { FIXTURE_PNG, FIXTURE_HASH } from '../spikes/transport/server';
+import { InboxWriter, type VaultStore } from '../src/core/writer';
+import { type SaveRequestData } from '../src/core/schema';
+import { ProbeError } from '../src/shared/errors';
+import { FIXTURE_PNG, FIXTURE_HASH } from './fixtures/image';
 
 class MemoryVault implements VaultStore {
   files = new Map<string, string>(); binaries = new Map<string, Uint8Array>(); buffers = new Map<string, string[]>();
