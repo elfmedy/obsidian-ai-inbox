@@ -1,4 +1,6 @@
-import { MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, type App, type SettingDefinitionItem } from 'obsidian';
+import { ContentSettings, resolveLanguage, type ContentSettingsData } from '../shared/export-options';
+import { translate, type TranslationKey } from './i18n';
+import { getLanguage, requireApiVersion, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, type App } from 'obsidian';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { InboxWriter, type VaultStore } from '../core/writer';
@@ -7,16 +9,25 @@ import { ownedArrayBuffer } from '../assets/binary';
 import { ProbeError } from '../shared/errors';
 import type { PairPrompt } from '../transport/pairing';
 
-const DataSchema = z.strictObject({ version: z.literal(1), vaultId: z.uuid(), token: z.string().regex(/^[a-f0-9]{64}$/), folder: z.string().default('AI Inbox'), writer: z.unknown() });
+const DataSchema = z.strictObject({ version: z.literal(1), vaultId: z.uuid(), token: z.string().regex(/^[a-f0-9]{64}$/), folder: z.string().default('AI Inbox'), ...ContentSettings.shape, writer: z.unknown() });
 type Data = z.infer<typeof DataSchema>;
 
 export default class AiInbox extends Plugin {
   private data: Data | undefined;
+  private settingsTab: InboxSettings | undefined;
   private receiver: Awaited<ReturnType<typeof startInboxServer>> | undefined;
   private disposed = false;
   private writer: InboxWriter | undefined;
   private dataTail: Promise<unknown> = Promise.resolve();
-  status = '正在启动';
+  private serviceState: 'starting' | 'ready' | 'failed' | 'resetFailed' = 'starting';
+  get contentSettings(): ContentSettingsData { return ContentSettings.parse(this.data ? { includeThinking: this.data.includeThinking, includeTitle: this.data.includeTitle, language: this.data.language } : {}); }
+  get language() { return resolveLanguage(this.contentSettings.language, getLanguage()); }
+  t(key: TranslationKey) { return translate(this.language, key); }
+  get status() { return this.serviceState === 'ready' ? this.t('ready') + this.folder : this.t(this.serviceState); }
+  async changeSettings(patch: Partial<ContentSettingsData>) {
+    try { ContentSettings.parse({ ...this.contentSettings, ...patch }); await this.updateData(patch); this.settingsTab?.refreshSettings(); return true; }
+    catch { new Notice(this.t('settingsFailed')); return false; }
+  }
   get folder() { return this.data?.folder ?? 'AI Inbox'; }
   private updateData(patch: Partial<Data>) {
     const work = this.dataTail.then(async () => {
@@ -26,14 +37,14 @@ export default class AiInbox extends Plugin {
     this.dataTail = work.catch(() => undefined); return work;
   }
   onload() {
-    this.addSettingTab(new InboxSettings(this.app, this));
+    this.settingsTab = new InboxSettings(this.app, this); this.addSettingTab(this.settingsTab);
     this.app.workspace.onLayoutReady(() => { if (!this.disposed) void this.start().catch(() => {
-      this.status = '启动失败，请检查数据文件及本地服务端口'; new Notice(this.status);
+      this.serviceState = 'failed'; this.settingsTab?.refreshSettings(); new Notice(this.status);
     }); });
   }
   private async start() {
     const raw: unknown = await this.loadData();
-    this.data = raw == null ? { version: 1, vaultId: randomUUID(), token: randomBytes(32).toString('hex'), folder: 'AI Inbox', writer: null } : DataSchema.parse(raw);
+    this.data = raw == null ? { version: 1, vaultId: randomUUID(), token: randomBytes(32).toString('hex'), folder: 'AI Inbox', ...ContentSettings.parse({}), writer: null } : DataSchema.parse(raw);
     await this.saveData(this.data);
     const ensureFolder = async (path: string) => {
       const parts = path.split('/'); parts.pop(); let current = '';
@@ -87,21 +98,21 @@ export default class AiInbox extends Plugin {
       },
       saveState: writer => this.updateData({ writer }),
     };
-    const writer = new InboxWriter(store, this.data.writer, this.data.folder); this.writer = writer;
+    const writer = new InboxWriter(store, this.data.writer, this.data.folder, () => ({ includeThinking: this.contentSettings.includeThinking, includeTitle: this.contentSettings.includeTitle, language: this.language })); this.writer = writer;
     const receiver = await startInboxServer({ writer, token: this.data.token, vaultId: this.data.vaultId, vaultName: this.app.vault.getName(), confirmPair: prompt => this.confirmPair(prompt) });
     if (this.disposed) { await receiver.close(); return; }
-    this.receiver = receiver; this.status = `已连接本地服务，保存位置：${this.folder}`;
+    this.receiver = receiver; this.serviceState = 'ready'; this.settingsTab?.refreshSettings();
   }
   private confirmPair(prompt: PairPrompt): Promise<boolean> {
     if (this.disposed || prompt.signal.aborted) return Promise.resolve(false);
-    return new Promise(resolve => { new PairingModal(this.app, prompt, resolve).open(); });
+    return new Promise(resolve => { new PairingModal(this.app, prompt, resolve, key => this.t(key)).open(); });
   }
   async changeFolder(folder: string) {
     try {
       if (!this.writer) throw new Error('Not ready');
       await this.writer.configureFolder(folder, () => this.updateData({ folder }));
-      this.status = `已连接本地服务，保存位置：${folder}`; new Notice('新建笔记的保存位置已更新，已有笔记仍在原位置更新');
-    } catch { new Notice('保存位置无效或设置未能写入，请检查后重试'); }
+      this.serviceState = 'ready'; this.settingsTab?.refreshSettings(); new Notice(this.t('folderSaved'));
+    } catch { new Notice(this.t('folderFailed')); }
   }
   async resetConnection() {
     try {
@@ -109,8 +120,8 @@ export default class AiInbox extends Plugin {
       await this.writer.ready(); await this.receiver.close(); this.receiver = undefined;
       await this.updateData({ token: randomBytes(32).toString('hex') });
       this.receiver = await startInboxServer({ writer: this.writer, token: this.data.token, vaultId: this.data.vaultId, vaultName: this.app.vault.getName(), confirmPair: prompt => this.confirmPair(prompt) });
-      new Notice('旧连接已失效，请在浏览器中重新确认配对');
-    } catch { this.status = '连接重置未完成，请重新加载插件'; new Notice(this.status); }
+      new Notice(this.t('resetSaved'));
+    } catch { this.serviceState = 'resetFailed'; this.settingsTab?.refreshSettings(); new Notice(this.status); }
   }
   onunload() {
     this.disposed = true;
@@ -120,16 +131,16 @@ export default class AiInbox extends Plugin {
 class PairingModal extends Modal {
   private settled = false;
   private abort = () => this.finish(false);
-  constructor(app: App, private readonly prompt: PairPrompt, private readonly resolve: (approved: boolean) => void) { super(app); }
+  constructor(app: App, private readonly prompt: PairPrompt, private readonly resolve: (approved: boolean) => void, private readonly t: (key: TranslationKey) => string) { super(app); }
   onOpen() {
     if (this.prompt.signal.aborted) { this.finish(false); return; }
     this.prompt.signal.addEventListener('abort', this.abort, { once: true });
-    this.setTitle('连接 AI Inbox');
-    this.contentEl.createEl('p', { text: `允许浏览器保存聊天到「${this.app.vault.getName()}」？` });
-    this.contentEl.createEl('p', { text: '核对浏览器显示的配对码。确认一次后，无需重复连接。' });
+    this.setTitle(this.t('pairTitle'));
+    this.contentEl.createEl('p', { text: this.t('pairVault') + this.app.vault.getName() });
+    this.contentEl.createEl('p', { text: this.t('pairDesc') });
     this.contentEl.createEl('h2', { text: this.prompt.code });
-    new Setting(this.contentEl).addButton(button => button.setButtonText('取消').onClick(() => this.finish(false)))
-      .addButton(button => button.setButtonText('允许连接').setCta().onClick(() => this.finish(true)));
+    new Setting(this.contentEl).addButton(button => button.setButtonText(this.t('cancel')).onClick(() => this.finish(false)))
+      .addButton(button => button.setButtonText(this.t('allow')).setCta().onClick(() => this.finish(true)));
   }
   private finish(approved: boolean) {
     if (this.settled) return; this.settled = true; this.prompt.signal.removeEventListener('abort', this.abort);
@@ -142,24 +153,48 @@ class PairingModal extends Modal {
 }
 class InboxSettings extends PluginSettingTab {
   constructor(app: App, private readonly inbox: AiInbox) { super(app, inbox); }
-  getSettingDefinitions(): SettingDefinitionItem[] {
+  getSettingDefinitions(): Array<{ name: string; desc: string; render: (setting: Setting) => void }> {
+    const t = (key: TranslationKey) => this.inbox.t(key);
     let folder = this.inbox.folder;
-    return [{ name: '浏览器连接', desc: '浏览器会自动发现本仓库，首次连接时在这里确认配对。请保持本仓库打开。',
-      render: setting => { setting.setDesc(this.inbox.status)
-        .addButton(button => button.setButtonText('重置连接').onClick(() => this.inbox.resetConnection())); },
-    }, { name: '保存文件夹', desc: '只影响新建笔记；已有笔记按当前位置更新。', render: setting => {
-      setting.addText(text => text.setValue(folder).onChange(value => { folder = value; }))
-        .addButton(button => button.setButtonText('应用').onClick(() => this.inbox.changeFolder(folder)));
-    } }];
+    return [
+      { name: t('language'), desc: t('languageDesc'), render: setting => {
+        setting.addDropdown(dropdown => dropdown.addOption('auto', t('auto')).addOption('zh', '简体中文').addOption('en', 'English')
+          .setValue(this.inbox.contentSettings.language).onChange(async value => {
+            if (value === 'auto' || value === 'zh' || value === 'en') { await this.inbox.changeSettings({ language: value }); this.refreshSettings(); }
+          }));
+      } },
+      { name: t('thinking'), desc: t('thinkingDesc') + ' ' + t('nextSave'), render: setting => {
+        setting.addToggle(toggle => toggle.setValue(this.inbox.contentSettings.includeThinking).onChange(async value => {
+          await this.inbox.changeSettings({ includeThinking: value }); this.refreshSettings();
+        }));
+      } },
+      { name: t('title'), desc: t('titleDesc'), render: setting => {
+        setting.addToggle(toggle => toggle.setValue(this.inbox.contentSettings.includeTitle).onChange(async value => {
+          await this.inbox.changeSettings({ includeTitle: value }); this.refreshSettings();
+        }));
+      } },
+      { name: t('connection'), desc: this.inbox.status + ' ' + t('instructions'), render: setting => {
+        setting.addButton(button => button.setButtonText(t('reset')).onClick(() => this.inbox.resetConnection()));
+      } },
+      { name: t('folder'), desc: t('folderDesc'), render: setting => {
+        setting.addText(text => text.setValue(folder).onChange(value => { folder = value; }))
+          .addButton(button => button.setButtonText(t('apply')).onClick(async () => { await this.inbox.changeFolder(folder); this.refreshSettings(); }));
+      } },
+    ];
   }
-  display() {
+  refreshSettings() {
+    if (requireApiVersion('1.13.0')) this.update();
+    else this.renderLegacy();
+  }
+  display() { this.renderLegacy(); }
+  private renderLegacy() {
     this.containerEl.empty();
-    let folder = this.inbox.folder;
-    new Setting(this.containerEl).setName('浏览器连接').setDesc(this.inbox.status)
-      .addButton(button => button.setButtonText('重置连接').onClick(() => this.inbox.resetConnection()));
-    new Setting(this.containerEl).setName('保存文件夹').setDesc('只影响新建笔记；已有笔记按当前位置更新。')
-      .addText(text => text.setValue(folder).onChange(value => { folder = value; }))
-      .addButton(button => button.setButtonText('应用').onClick(() => this.inbox.changeFolder(folder)));
-    this.containerEl.createEl('p', { text: '浏览器会自动发现本仓库，首次连接时确认一次配对。请保持本仓库打开；未运行时保存会失败。' });
+    for (const definition of this.getSettingDefinitions()) {
+      if (!('name' in definition)) continue;
+      const setting = new Setting(this.containerEl).setName(definition.name).setDesc(definition.desc ?? '');
+      definition.render?.(setting);
+    }
+    this.containerEl.createEl('p', { text: this.inbox.t('nextSave') });
+    this.containerEl.createEl('p', { text: this.inbox.t('instructions') });
   }
 }

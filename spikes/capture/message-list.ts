@@ -1,3 +1,4 @@
+import { thinkingMessage } from './thinking';
 import { isRecord, ProbeError } from '../shared/errors';
 import { parseVisibleMessage, type GraphMessage } from './graph';
 import { summarizeMessageShapes } from './graph-shape';
@@ -25,7 +26,7 @@ export function messageListCoverage(input: unknown): PageCoverage {
 
 /** The new endpoint exposes a sequence, not parent/child mapping. Never invent
  * graph edges. Validation remains experimental until live history tests pass. */
-export function inspectMessageList(input: unknown, expectedId: string, coverage: PageCoverage = 'unknown', enableToolImages = false) {
+export function inspectMessageList(input: unknown, expectedId: string, coverage: PageCoverage = 'unknown', enableToolImages = false, includeThinking = false) {
   const source = isRecord(input) ? input : {};
   const records: unknown[] = Array.isArray(source.messages) ? source.messages : [];
   const diagnostics = { recordCount: records.length, coverage, identityMatches: source.conversation_id === expectedId,
@@ -33,6 +34,7 @@ export function inspectMessageList(input: unknown, expectedId: string, coverage:
     validated: false, issues: [] as string[], ignoredReasons: {} as Record<string, number>, shape: summarizeMessageShapes(records),
     failedMessages: [] as Array<{ index: number; code: string; fields: ReturnType<typeof summarizeFailure> }> };
   const messages: GraphMessage[] = [];
+  const thinkingIds: string[] = [];
   const reject = (code: string) => { if (!diagnostics.issues.includes(code)) diagnostics.issues.push(code); };
   if (!diagnostics.identityMatches) reject('IDENTITY_MISMATCH');
   if (records.length === 0) reject('EMPTY_MESSAGE_ARRAY');
@@ -46,7 +48,8 @@ export function inspectMessageList(input: unknown, expectedId: string, coverage:
       if (ids.has(record.id)) { diagnostics.uniqueIds = false; reject('DUPLICATE_MESSAGE_ID'); }
       ids.add(record.id);
       try {
-        const message = parseVisibleMessage(record, toolNames, enableToolImages);
+        if (thinkingMessage(record, toolNames, false) !== undefined) thinkingIds.push(record.id);
+        const message = parseVisibleMessage(record, toolNames, enableToolImages, includeThinking);
         if (message) messages.push(message);
         else {
           diagnostics.ignoredInternalMessages++;
@@ -65,5 +68,5 @@ export function inspectMessageList(input: unknown, expectedId: string, coverage:
   diagnostics.recognizedVisibleMessages = messages.length;
   if (messages.length === 0) reject('NO_VISIBLE_MESSAGES');
   diagnostics.validated = diagnostics.issues.length === 0;
-  return { diagnostics, messages: diagnostics.validated ? messages : [] };
+  return { diagnostics, thinkingIds, messages: diagnostics.validated ? messages : [] };
 }

@@ -19,6 +19,13 @@ Their notices apply to those portions; original authorship is not reassigned.
 
 ## chatgpt-exporter
 
+- Thinking support in `spikes/capture/thinking.ts` also uses the same pinned
+  `src/api.ts` thought/recap shapes and `reasoning_title` classification from
+  `attachThinkingToNodes`. Changes: bounded unknown-input parsing, explicit
+  per-Vault opt-in, collapsed Markdown callouts, expanded UI identity handling,
+  and strict separation from raw analysis / tool input and output. The existing
+  MIT license below applies; thinking support was checked with synthetic fixtures.
+
 - Author: Pionxzh. License: MIT, copyright 2022-Present Pionxzh.
 - Source: https://github.com/pionxzh/chatgpt-exporter
 - Revision: `d0f44aae9d5650852b2979bbf830590b41f7b804`.

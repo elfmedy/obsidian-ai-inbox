@@ -28,7 +28,8 @@ async function capture(state: CaptureState) {
     if (Date.now() - state.started > 14 * 60 * 1000) throw new ProbeError('CAPTURE_TIMEOUT', 'Capture timed out');
   };
   checkPage();
-  const request = () => probeObservedRequest({ pageUrl: state.pageUrl, enableToolImages: true,
+  const includeThinking = globalThis.aiInboxCaptureOptions?.includeThinking === true;
+  const request = () => probeObservedRequest({ pageUrl: state.pageUrl, enableToolImages: true, includeThinking,
     scripts: Array.from(document.scripts, script => script.textContent ?? ''),
     resources: performance.getEntriesByType('resource').filter((entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming)
       .map(entry => ({ name: entry.name, initiatorType: entry.initiatorType })),
@@ -42,19 +43,20 @@ async function capture(state: CaptureState) {
       throw new ProbeError(code, 'Conversation response is unverified');
     }
     if (result.messageList?.diagnostics.validated) return result.messageList.messages;
-    if (result.graphs.length === 1) return verifyCurrentPath(result.graphs[0], id, true).messages;
+    if (result.graphs.length === 1) return verifyCurrentPath(result.graphs[0], id, true, includeThinking).messages;
     throw new ProbeError('NO_VALIDATED_CONVERSATION_SOURCE', 'Conversation source is unavailable');
   };
   const first = await request(); const messages = sourceMessages(first);
-  const ordinary = messages.filter(message => message.sourceKind !== 'tool-image');
-  const positions = initialVisible.map(visible => ordinary.findIndex(message => message.id === visible));
+  const ordinary = messages.filter(message => message.sourceKind !== 'tool-image' && message.sourceKind !== 'thinking');
+  const thinkingIds = new Set(first.messageList?.thinkingIds ?? (first.graphs.length === 1 ? verifyCurrentPath(first.graphs[0], id, true, includeThinking).thinkingIds : []));
+  const positions = initialVisible.filter(visible => !thinkingIds.has(visible)).map(visible => ordinary.findIndex(message => message.id === visible));
   if (!positions.length || positions.some((position, index) => position < 0 || (index > 0 && position <= positions[index - 1]!)) || positions.at(-1) !== ordinary.length - 1) {
     throw new ProbeError('VISIBLE_CHAIN_NOT_CONFIRMED', 'The selected branch does not match the page');
   }
   // Expand references once per message, preserving code/TeX and source order.
   const expanded = messages.map(message => {
     let lastText = -1; message.parts.forEach((part, index) => { if (part.type === 'text') lastText = index; });
-    return { id: message.id, role: message.role, parts: message.parts.map((part, index) => part.type === 'text'
+    return { id: message.id, role: message.role, ...(message.sourceKind === 'thinking' ? { kind: 'thinking' as const } : {}), parts: message.parts.map((part, index) => part.type === 'text'
       ? { ...part, text: expandCitations(part.text, message.contentReferences, index === lastText) } : part) };
   });
   const manifest = imageManifest(expanded); const digests = new Map<string, string>();

@@ -1,6 +1,6 @@
 # 开发与发布规范
 
-当前发布版本为 AI Inbox 0.2.0 Alpha，支持 GitHub Release / BRAT 安装；P0 诊断工具独立保留，暂不提交社区目录。规范参考 [Obsidian 官方提交流程](https://docs.obsidian.md/plugins/releasing/submit-plugin)。
+当前发布版本为 AI Inbox 0.3.0 Alpha，支持 GitHub Release / BRAT 安装；P0 诊断工具独立保留，暂不提交社区目录。规范参考 [Obsidian 官方提交流程](https://docs.obsidian.md/plugins/releasing/submit-plugin)。
 
 ## 文件与版本
 
@@ -44,4 +44,4 @@ P0→P6 验收、最低支持版本实机验证、完整权限和网络行为说
 3. 审查提交清单，仅添加根项目配置文档以及 `.github/`、`docs/`、`scripts/`、`spikes/`、`tests/`、`third-party/` 中的公开文件。排除本机数据、密钥和生成结果。
 4. 推送源码并等待 CI 通过，创建与版本一致的标签。发布 `dist/releases` 中该版本的 ZIP、独立运行文件和 SHA256SUMS；不要上传旧版本 ZIP。
 5. 检查 Release 的 manifest 与仓库根清单相同，main.js 与构建字节相同。BRAT 安装不会复制许可证附件，因此 main.js 内嵌完整第三方许可。
-6. 当前 0.2.0 使用普通 GitHub Release 供 BRAT 默认安装/更新查找，标题与说明明确标为 Alpha；这不表示社区审核或剩余真实场景验收已经通过。
+6. 当前 0.3.0 使用普通 GitHub Release 供 BRAT 默认安装/更新查找，标题与说明明确标为 Alpha；这不表示社区审核或剩余真实场景验收已经通过。

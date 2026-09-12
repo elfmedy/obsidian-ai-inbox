@@ -19,4 +19,4 @@ export interface CaptureState {
   snapshot?: SnapshotData; bytes: Record<string, Uint8Array>;
   diagnostics?: CaptureDiagnostics;
 }
-declare global { var aiInboxCapture: CaptureState | undefined; }
+declare global { var aiInboxCaptureOptions: { includeThinking: boolean } | undefined; var aiInboxCapture: CaptureState | undefined; }

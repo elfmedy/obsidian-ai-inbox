@@ -1,3 +1,4 @@
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptionsData } from '../spikes/shared/export-options';
 import { randomUUID, createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { InboxWriter, type VaultStore } from '../spikes/core/writer';
@@ -156,5 +157,54 @@ describe('durable save policy', () => {
     data.requestId = randomUUID(); data.expectedRevision = 1;
     expect((await writer.save(data)).action).toBe('forked'); expect(vault.binaries.get(path)).toEqual(new Uint8Array([1, 2, 3]));
     expect(vault.files.get(first.path)).toContain(path); expect(vault.binaries.size).toBe(2);
+  });
+});
+
+
+describe('content settings at save time', () => {
+  it('updates an untouched note after title preference changes even when source is unchanged', async () => {
+    const vault = new MemoryVault(); let options = { ...DEFAULT_EXPORT_OPTIONS };
+    const writer = new InboxWriter(vault, null, 'AI Inbox', () => options);
+    const first = await writer.save(request()); expect(vault.files.get(first.path)).not.toContain('# Title');
+    options = { ...options, includeTitle: true };
+    const second = await writer.save(request(1)); expect(second.action).toBe('updated');
+    expect(vault.files.get(first.path)).toContain('# Title');
+    expect((await writer.save(request(2))).action).toBe('unchanged');
+    options = { ...options, includeTitle: false };
+    expect((await writer.save(request(3))).action).toBe('updated');
+    expect(vault.files.get(first.path)).not.toContain('# Title');
+  });
+  it('forks instead of overwriting local edits when content preferences change', async () => {
+    const vault = new MemoryVault(); let options = { ...DEFAULT_EXPORT_OPTIONS };
+    const writer = new InboxWriter(vault, null, 'AI Inbox', () => options);
+    const first = await writer.save(request()); const edited = vault.files.get(first.path)! + '\nLocal edits'; vault.files.set(first.path, edited);
+    options = { ...options, includeTitle: true };
+    const second = await writer.save(request(1)); expect(second.action).toBe('forked');
+    expect(vault.files.get(first.path)).toBe(edited); expect(vault.files.get(second.path)).toContain('# Title');
+  });
+  it('writes requested thinking in collapsed callouts and removes it on the next save when disabled', async () => {
+    const vault = new MemoryVault(); let options: ExportOptionsData = { ...DEFAULT_EXPORT_OPTIONS, includeThinking: true, language: 'en' };
+    const writer = new InboxWriter(vault, null, 'AI Inbox', () => options);
+    const data = request(); data.exportOptions = options;
+    data.snapshot.messages.push({ id: 'thinking', role: 'assistant', kind: 'thinking', parts: [{ type: 'text', text: 'Synthetic thought\n\n- Detail' }] });
+    const first = await writer.save(data); const body = vault.files.get(first.path)!;
+    expect(body).toContain('> [!note]- Thinking\n> Synthetic thought\n> \n> - Detail');
+    expect(body).toContain('## User');
+    options = { ...options, includeThinking: false };
+    const second = await writer.save({ ...data, requestId: randomUUID(), expectedRevision: 1, exportOptions: options });
+    expect(second.action).toBe('updated'); expect(vault.files.get(first.path)).not.toContain('Synthetic thought');
+  });
+  it('rejects stale capture settings before writing, but returns an already committed receipt unchanged', async () => {
+    const vault = new MemoryVault(); let options = { ...DEFAULT_EXPORT_OPTIONS };
+    const writer = new InboxWriter(vault, null, 'AI Inbox', () => options);
+    const data = { ...request(), exportOptions: options }; const first = await writer.save(data);
+    options = { ...options, includeTitle: true };
+    expect(await writer.save(data)).toEqual(first);
+    await expect(writer.save({ ...data, requestId: randomUUID(), expectedRevision: 1 })).rejects.toMatchObject({ code: 'EXPORT_SETTINGS_CHANGED' });
+    expect(vault.files.size).toBe(1); expect(writer.revision('chat-1')).toBe(1);
+  });
+  it('requires a capable extension when thinking export is enabled', async () => {
+    const vault = new MemoryVault(); const writer = new InboxWriter(vault, null, 'AI Inbox', () => ({ ...DEFAULT_EXPORT_OPTIONS, includeThinking: true }));
+    await expect(writer.save(request())).rejects.toMatchObject({ code: 'EXTENSION_UPDATE_REQUIRED' }); expect(vault.files.size).toBe(0);
   });
 });

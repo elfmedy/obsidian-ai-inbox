@@ -83,7 +83,7 @@ async function requestJson(url: string, fetcher: typeof fetch, token?: string) {
   return { status: response.status, data };
 }
 
-export async function probeObservedRequest(input: { pageUrl: string; resources: Resource[]; scripts: string[]; enableToolImages?: boolean }, fetcher: typeof fetch = fetch) {
+export async function probeObservedRequest(input: { pageUrl: string; resources: Resource[]; scripts: string[]; enableToolImages?: boolean; includeThinking?: boolean }, fetcher: typeof fetch = fetch) {
   const requests = discoverRequests(input.resources, input.pageUrl);
   const diagnostics: RequestDiagnostics = {
     resourceEntries: input.resources.length, conversationRequests: requests.conversations.length,
@@ -143,7 +143,7 @@ export async function probeObservedRequest(input: { pageUrl: string; resources: 
         response = { ...response, data: collected.data };
       }
       if (isRecord(response.data) && Array.isArray(response.data.messages)) {
-        messageList = inspectMessageList(response.data, requests.id, messageListCoverage(response.data), input.enableToolImages);
+        messageList = inspectMessageList(response.data, requests.id, messageListCoverage(response.data), input.enableToolImages, input.includeThinking);
         diagnostics.messageArray = messageList.diagnostics;
       }
       graphs = findConversationGraphs([response.data], requests.id);

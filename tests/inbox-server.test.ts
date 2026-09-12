@@ -35,6 +35,8 @@ describe('alpha loopback protocol', () => {
       expect(approved.connection).toEqual({ endpoint: endpoint + '/', vaultId, token });
       const unauthorized = await fetch(`${endpoint}/v1/pair/status`, { method: 'POST', headers: pairHeaders, body: JSON.stringify({ clientId, secret: 'c'.repeat(64), pairId: start.pairId }) });
       expect(unauthorized.ok).toBe(false); expect(await unauthorized.text()).not.toContain(token);
+      expect((await fetch(`${endpoint}/v1/export-options`)).status).toBe(401);
+      expect(await (await fetch(`${endpoint}/v1/export-options`, { headers })).json()).toEqual({ includeThinking: false, includeTitle: false, language: 'zh' });
       expect((await fetch(`${endpoint}/v1/hello`)).status).toBe(401);
       expect((await fetch(`${endpoint}/v1/hello`, { headers: { ...headers, Origin: 'https://chatgpt.com' } })).status).toBe(403);
       const wrongHostStatus = await new Promise<number | undefined>((resolve, reject) => {

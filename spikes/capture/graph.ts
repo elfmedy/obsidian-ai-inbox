@@ -1,3 +1,4 @@
+import { thinkingMessage } from './thinking';
 import { ProbeError, requireRecord } from '../shared/errors';
 import { collectToolNames, internalMessageReason } from './message-classification';
 import { attachmentDescriptions, metadataImages, parseImagePart, toolImages } from './image-parts';
@@ -6,7 +7,7 @@ import { readReferences, type ContentReference } from '../render/citations';
 export interface GraphMessage {
   id: string;
   role: 'user' | 'assistant';
-  sourceKind?: 'tool-image';
+  sourceKind?: 'tool-image' | 'thinking';
   contentReferences?: ContentReference[];
   parts: Array<{ type: 'text'; text: string } | { type: 'image'; pointer: string; alt?: string }>;
 }
@@ -14,6 +15,7 @@ export interface GraphMessage {
 export interface VerifiedPath {
   messages: GraphMessage[];
   nodeIds: string[];
+  thinkingIds: string[];
   rootId: string;
   leafId: string;
   ignoredInternalMessages: number;
@@ -21,7 +23,7 @@ export interface VerifiedPath {
 
 /** P0 structural validator. A valid chain is necessary, but is NOT proof that
  * a live page supplied the latest/full graph. The browser probe adds this caveat. */
-export function verifyCurrentPath(input: unknown, expectedConversationId: string, enableToolImages = false): VerifiedPath {
+export function verifyCurrentPath(input: unknown, expectedConversationId: string, enableToolImages = false, includeThinking = false): VerifiedPath {
   const source = requireRecord(input);
   if (source.conversation_id !== expectedConversationId && source.id !== expectedConversationId) {
     throw new ProbeError('IDENTITY_MISMATCH', 'Conversation identity differs');
@@ -51,6 +53,7 @@ export function verifyCurrentPath(input: unknown, expectedConversationId: string
   const root = chain[0];
   if (!root) throw new ProbeError('EMPTY_GRAPH', 'No branch found');
   const messages: GraphMessage[] = [];
+  const thinkingIds: string[] = [];
   const toolNames = collectToolNames(chain.map(entry => entry.node.message));
   let ignoredInternalMessages = 0;
   for (let index = 0; index < chain.length; index++) {
@@ -63,18 +66,22 @@ export function verifyCurrentPath(input: unknown, expectedConversationId: string
       if (index !== 0) throw new ProbeError('MISSING_MESSAGE', 'Non-root message is absent');
       continue;
     }
-    const message = parseVisibleMessage(entry.node.message, toolNames, enableToolImages);
+    const rawMessage = requireRecord(entry.node.message);
+    if (thinkingMessage(rawMessage, toolNames, false) !== undefined && typeof rawMessage.id === 'string') thinkingIds.push(rawMessage.id);
+    const message = parseVisibleMessage(entry.node.message, toolNames, enableToolImages, includeThinking);
     if (message) messages.push(message);
     else ignoredInternalMessages++;
   }
   if (messages.length === 0) throw new ProbeError('EMPTY_GRAPH', 'No visible messages');
-  return { messages, nodeIds: chain.map(item => item.id), rootId: root.id, leafId, ignoredInternalMessages };
+  return { messages, thinkingIds, nodeIds: chain.map(item => item.id), rootId: root.id, leafId, ignoredInternalMessages };
 }
 
 /** Shared content rules; callers separately prove identity, ordering and range. */
-export function parseVisibleMessage(input: unknown, toolNames: ReadonlySet<string> = new Set(), enableToolImages = false): GraphMessage | null {
+export function parseVisibleMessage(input: unknown, toolNames: ReadonlySet<string> = new Set(), enableToolImages = false, includeThinking = false): GraphMessage | null {
     const message = requireRecord(input, 'MISSING_MESSAGE');
     const author = requireRecord(message.author, 'UNKNOWN_ROLE');
+    const thinking = thinkingMessage(message, toolNames, includeThinking);
+    if (thinking !== undefined) return thinking;
     const channel = message.channel;
     if (internalMessageReason(message, toolNames)) return null;
     if (author.role === 'tool') {

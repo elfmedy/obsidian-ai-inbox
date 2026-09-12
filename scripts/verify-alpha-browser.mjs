@@ -23,14 +23,39 @@ const launch = () => chromium.launchPersistentContext(join(testRoot, 'profile'),
   ignoreDefaultArgs: ['--disable-extensions'], args: ['--enable-unsafe-extension-debugging'], viewport: { width: 1100, height: 820 } });
 let context = await launch();
 let secondaryServer; let pausedReceiver = false;
+const originalContentSettings = { includeThinking: config.includeThinking ?? false, includeTitle: config.includeTitle ?? false, language: config.language ?? 'auto' };
 const cli = process.env.OBSIDIAN_CLI ?? resolve(process.env.LOCALAPPDATA, 'Obsidian/Obsidian.com');
 const errors = []; context.on('weberror', error => { errors.push(error.error().message); });
+const evaluateObsidian = code => {
+  const output = execFileSync(cli, ['vault=p0-vault', 'eval', `code=${code}`], { encoding: 'utf8', windowsHide: true });
+  assert.doesNotMatch(output, /^Error:/m); return output;
+};
+const setContentSettings = settings => evaluateObsidian(`(async()=>{if(!await app.plugins.plugins['ai-inbox'].changeSettings(${JSON.stringify(settings)}))throw new Error('Settings failed');return true})()`);
+// Scope this controlled run to its marked test Vault and synthetic receiver.
+// Other running user Vaults may be advertised, but are never selected or changed.
+const scopeDiscovery = async (worker, ids) => worker.evaluate(ids => {
+  globalThis.fixtureVaultIds = ids;
+  if (globalThis.fixtureScopedFetch) return;
+  globalThis.fixtureScopedFetch = true;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (...args) => {
+    const response = await original(...args);
+    if (/^http:\/\/127\.0\.0\.1:\d+\/v1\/discovery$/.test(String(args[0])) && response.ok) {
+      const value = await response.clone().json();
+      if (!globalThis.fixtureVaultIds.includes(value.vaultId)) return new Response('{}', { status: 404 });
+    }
+    return response;
+  };
+}, ids);
 try {
+  setContentSettings({ includeThinking: false, includeTitle: false, language: 'zh' });
   let protocol = await context.browser().newBrowserCDPSession();
   await protocol.send('Extensions.loadUnpacked', { path: extension });
   let worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker', { timeout: 15000 });
+  await scopeDiscovery(worker, [config.vaultId]);
   const extensionId = new URL(worker.url()).hostname;
   const chatId = randomUUID(); const userId = randomUUID(); const assistantId = randomUUID(); const commentaryId = randomUUID();
+  const thinkingId = randomUUID();
   const marker = '\uE200cite\uE202turn0search0\uE201';
   const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOwaPr2HwAFVgKwVpOyIwAAAABJRU5ErkJggg==', 'base64');
   const sha256 = createHash('sha256').update(bytes).digest('hex'); const title = `Browser alpha ${Date.now()}`;
@@ -41,6 +66,8 @@ try {
     messages: [
       { id: userId, author: { role: 'user' }, channel: null, status: 'finished_successfully', metadata: { attachments: [{ name: 'Sample.pdf', mime_type: 'application/pdf', id: 'file-pdf' }] },
         content: { content_type: 'multimodal_text', parts: ['Synthetic question', { content_type: 'image_asset_pointer', asset_pointer: 'file-fixture', alt: 'Synthetic image' }] } },
+      { id: thinkingId, author: { role: 'assistant' }, recipient: 'all', status: 'finished_successfully', metadata: { is_visually_hidden_from_conversation: true },
+        content: { content_type: 'thoughts', thoughts: [{ summary: 'Synthetic thinking summary', content: 'Expanded thinking detail', finished: true }] } },
       { id: commentaryId, author: { role: 'assistant' }, channel: 'commentary', recipient: 'all', status: 'finished_successfully',
         content: { content_type: 'text', parts: ['Synthetic user-facing progress'] } },
       { id: assistantId, author: { role: 'assistant' }, channel: 'final', status: 'finished_successfully',
@@ -51,6 +78,7 @@ try {
     const url = new URL(route.request().url());
     if (url.pathname === `/c/${chatId}`) await route.fulfill({ contentType: 'text/html', body: `<!doctype html><title>${title}</title>
       <h1>Synthetic conversation</h1><article data-message-author-role="user" data-message-id="${userId}">Synthetic question</article>
+      <article data-message-author-role="assistant" data-message-id="${thinkingId}">Expanded thinking detail</article>
       <article data-message-author-role="assistant" data-message-id="${assistantId}">Synthetic answer</article>
       <script type="application/json">${JSON.stringify({ user: { id: 'fixture-user' }, expires: '2099-01-01', accessToken: 'synthetic-fixture-token' })}</script>
       <script>fetch('/backend-api/conversations/${chatId}?include_has_versions=true&num_turns=10').then(r=>r.json()).then(()=>document.body.dataset.ready='yes')</script>` });
@@ -91,7 +119,7 @@ try {
       status = await worker.evaluate(async tabId => (await chrome.storage.local.get(`status:${tabId}`))[`status:${tabId}`], tabId);
       if (status?.stage === 'pairing' && !pairingApproved) {
         assert.match(status.pairCode, /^\d{6}$/); assert.equal(status.vaultName, 'p0-vault');
-        const approve = `(()=>{const matches=Array.from(document.querySelectorAll('.modal')).filter(el=>el.textContent.includes('连接 AI Inbox')&&el.textContent.includes(${JSON.stringify(status.pairCode)}));if(matches.length!==1)throw new Error('Expected one synthetic pairing modal');const button=Array.from(matches[0].querySelectorAll('button')).find(button=>button.textContent==='允许连接');if(!button)throw new Error('Pairing button missing');button.click();return true})()`;
+        const approve = `(async()=>{await new Promise(r=>setTimeout(r,250));const matches=Array.from(activeDocument.querySelectorAll('.modal')).filter(el=>el.textContent.includes('连接 AI Inbox')&&el.textContent.includes(${JSON.stringify(status.pairCode)}));if(matches.length!==1)throw new Error('Expected one synthetic pairing modal');const button=Array.from(matches[0].querySelectorAll('button')).find(button=>button.textContent==='允许连接');if(!button)throw new Error('Pairing button missing');button.click();return true})()`;
         const result = execFileSync(cli, ['vault=p0-vault', 'eval', `code=${approve}`], { encoding: 'utf8', windowsHide: true }); assert.doesNotMatch(result, /^Error:/m); pairingApproved = true;
       }
       if (['success', 'error'].includes(status?.stage)) break;
@@ -113,6 +141,20 @@ try {
   assert.ok(text.indexOf('Synthetic user-facing progress') < text.indexOf('Synthetic answer'));
   assert.ok(text.includes('![Synthetic image]')); assert.ok(text.includes('Sample\\.pdf'));
   const assetPath = decodeURIComponent(/!\[[^\n]+\]\(<\/([^>]+)>\)/.exec(text)[1]); assert.equal(createHash('sha256').update(await readFile(join(vault, assetPath))).digest('hex'), sha256);
+  assert.ok(!text.includes('Expanded thinking detail')); assert.ok(!text.includes(`# ${title}`));
+  setContentSettings({ includeThinking: true, includeTitle: true, language: 'en' });
+  const withThinking = await trigger('updated'); assert.equal(withThinking.receipt.messages, 4);
+  const expanded = await readFile(join(vault, first.receipt.path), 'utf8');
+  assert.ok(expanded.includes('> [!note]- Thinking')); assert.ok(expanded.includes('Expanded thinking detail'));
+  assert.ok(expanded.includes(`# ${title}`)); assert.ok(expanded.includes('## User')); assert.ok(expanded.includes(sha256));
+  const englishUI = evaluateObsidian(`(async()=>{app.setting.open();app.setting.openTabById('ai-inbox');await new Promise(r=>setTimeout(r,150));return JSON.stringify({english:app.setting.activeTab.containerEl.textContent.includes('Save thinking content')})})()`);
+  assert.ok(englishUI.includes('"english":true'));
+  setContentSettings({ includeThinking: false, includeTitle: false, language: 'zh' });
+  const chineseUI = evaluateObsidian(`(async()=>{app.setting.openTabById('ai-inbox');await new Promise(r=>setTimeout(r,150));return JSON.stringify({chinese:app.setting.activeTab.containerEl.textContent.includes('保存思考内容')})})()`);
+  assert.ok(chineseUI.includes('"chinese":true'));
+  evaluateObsidian('app.setting.close()');
+  await trigger('updated'); const reduced = await readFile(join(vault, first.receipt.path), 'utf8');
+  assert.ok(!reduced.includes('Expanded thinking detail')); assert.ok(!reduced.includes(`# ${title}`));
   await trigger('unchanged'); answer += '\nNew source text'; await trigger('updated');
   const code = `(async()=>{const f=app.vault.getFileByPath(${JSON.stringify(first.receipt.path)});await app.vault.modify(f,(await app.vault.read(f))+"\\nLocal edit from browser test");return true})()`;
   const output = execFileSync(cli, ['vault=p0-vault', 'eval', `code=${code}`], { encoding: 'utf8', windowsHide: true }); assert.doesNotMatch(output, /^Error:/m);
@@ -138,7 +180,8 @@ try {
   protocol = await context.browser().newBrowserCDPSession();
   const installed = (await protocol.send('Extensions.getExtensions')).extensions;
   if (!installed.some(item => item.id === extensionId && item.enabled)) await protocol.send('Extensions.loadUnpacked', { path: extension });
-  worker = context.serviceWorkers()[0];
+  worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+  await scopeDiscovery(worker, [config.vaultId]);
   await context.route('https://chatgpt.com/**', mockRoute);
   options = await context.newPage(); await options.goto(`chrome-extension://${extensionId}/options.html`);
   await options.evaluate(async tabId => { await chrome.storage.local.remove(`status:${tabId}`); }, tabId); tabId = undefined;
@@ -152,7 +195,7 @@ try {
   invalidCitation = true;
   const failedCapture = await trigger(null, 'error');
   assert.equal(failedCapture.code, 'CITATION_URL_INVALID'); assert.equal(failedCapture.notSubmitted, true);
-  assert.equal(failedCapture.diagnostics.validation.failedMessages[0].index, 2);
+  assert.equal(failedCapture.diagnostics.validation.failedMessages[0].index, 3);
   const statusPage = await context.newPage(); await statusPage.goto(`chrome-extension://${extensionId}/status.html?tab=${tabId}`);
   await statusPage.locator('#copy').waitFor({ state: 'visible' });
   const diagnostic = await statusPage.locator('#diagnostics-text').textContent();
@@ -180,6 +223,7 @@ try {
     editor: () => [], markdownPaths: () => [...files.keys()], readBinary: async path => images.get(path) ?? null,
     createBinary: async (path, bytes) => { images.set(path, bytes); }, attachmentPath: async filename => filename, saveState: async () => undefined };
   secondaryServer = await startInboxServer({ writer: new InboxWriter(store, null), vaultId: secondId, token: 'c'.repeat(64), vaultName: 'Synthetic second vault', confirmPair: async () => true });
+  await scopeDiscovery(worker, [config.vaultId, secondId]);
   await options.evaluate(async () => await chrome.storage.local.remove(['connection', 'defaultVaultName']));
   const beforeChoice = conversationRequests;
   const needsChoice = await trigger(null, 'error'); assert.equal(needsChoice.code, 'VAULT_SELECTION_REQUIRED'); assert.equal(conversationRequests, beforeChoice);
@@ -212,7 +256,8 @@ try {
   await trigger('unchanged');
   assert.equal(await worker.evaluate(async () => await chrome.action.getBadgeText({})), '');
   assert.equal(errors.length, 0, errors.join('\n'));
-  const report = { at: new Date().toISOString(), passed: true, kind: 'packaged-extension-synthetic-browser-real-obsidian',
+  const report = { at: new Date().toISOString(), passed: true, kind: 'packaged-extension-synthetic-browser-real-obsidian', discoveryScopedToTestVaults: true,
+    contentSettingsApplied: true, thinkingDefaultExcluded: true, thinkingOptInCollapsed: true, titleDefaultExcluded: true, settingsChangeUpdatesSameSource: true, obsidianBilingualSettings: true, expandedThinkingDomIdsAccepted: true,
     settingsConnection: true, noManualConnectionEntry: true, initialPairingApproved: pairingApproved, captureMessages: 3, userFacingCommentaryPreserved: true, commentaryAbsentFromDomAccepted: true, imageBytesVerified: true, citationConverted: true,
     citationFormatMarkersHandled: true, unresolvedCitationPreserved: true,
     altPreserved: true, attachmentNamePreserved: true, noChange: true, sourceUpdate: true, localEditFork: true, lostResponseWorkerRestartRecovered: true, recoveryDidNotDuplicate: true,
@@ -225,5 +270,6 @@ try {
 } finally {
   if (secondaryServer) await secondaryServer.close();
   if (pausedReceiver) execFileSync(cli, ['vault=p0-vault', 'eval', 'code=(async()=>{await app.plugins.enablePluginAndSave("ai-inbox");return true})()'], { windowsHide: true });
+  setContentSettings(originalContentSettings);
   await context.close();
 }

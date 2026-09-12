@@ -1,3 +1,4 @@
+import { DEFAULT_EXPORT_OPTIONS, ExportOptions, type ExportOptionsData } from '../shared/export-options';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { decideSave, hash, normalizeBody, safeTitle, splitMarkdown, timestampName } from '../persistence/policy';
@@ -41,12 +42,13 @@ export class InboxWriter {
   // Browser outbox owns durable upload bytes. The receiver buffers them until
   // the final note path is known, so relative attachment settings are correct.
   private uploads = new Map<string, Uint8Array>();
-  constructor(private readonly store: VaultStore, initial: unknown, private folder = 'AI Inbox') {
+  constructor(private readonly store: VaultStore, initial: unknown, private folder = 'AI Inbox', private readonly options: () => ExportOptionsData = () => DEFAULT_EXPORT_OPTIONS) {
     const parsed = StateSchema.safeParse(initial ?? emptyState());
     if (!parsed.success) fail('INDEX_INVALID');
     this.state = parsed.data;
     this.checkFolder(folder);
   }
+  exportOptions() { return ExportOptions.parse(this.options()); }
   private checkFolder(folder: string) {
     if (!folder || folder.length > 120 || folder.split('/').some(part => !part || ['.', '..'].includes(part) || /[ .]$/.test(part) ||
         /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(part)) || /[\\:[\]<>"|?*\r\n#%]/.test(folder)) fail('FOLDER_INVALID');
@@ -154,14 +156,18 @@ export class InboxWriter {
     const payloadHash = hash(stableJson(request));
     const prior = this.state.requests[request.requestId];
     if (prior) { if (prior.payloadHash !== payloadHash) fail('REQUEST_ID_REUSED'); return prior.receipt; }
-    const snapshot = request.snapshot;
+    const exportOptions = this.exportOptions();
+    if (request.exportOptions && stableJson(request.exportOptions) !== stableJson(exportOptions)) fail('EXPORT_SETTINGS_CHANGED');
+    if (!request.exportOptions && exportOptions.includeThinking) fail('EXTENSION_UPDATE_REQUIRED');
+    const snapshot = { ...request.snapshot, messages: request.snapshot.messages.filter(message => exportOptions.includeThinking || message.kind !== 'thinking') };
+    if (!snapshot.messages.some(message => message.kind !== 'thinking')) fail('EMPTY_GRAPH');
     if (request.expectedRevision !== this.revision(snapshot.conversationId)) fail('REVISION_CONFLICT');
     const assetBytes = await this.assetBytes(snapshot);
-    const messages = snapshot.messages.map(message => ({ ...message, parts: message.parts.map(part => part.type === 'image'
+    const messages = snapshot.messages.map(message => ({ ...message, ...(message.kind === 'thinking' ? { sourceKind: 'thinking' as const } : {}), parts: message.parts.map(part => part.type === 'image'
       ? { type: 'image' as const, pointer: `ai-inbox-asset:${part.sha256}`, ...(part.alt ? { alt: part.alt } : {}) } : part) }));
     const manifest = imageManifest(messages);
     if (manifest.some(asset => !assetBytes.has(asset.reference.slice('ai-inbox-asset:'.length))) || manifest.length !== assetBytes.size) fail('ASSET_MANIFEST_MISMATCH');
-    const sourceHash = hash(stableJson({ title: snapshot.title, messages: snapshot.messages.map(message => ({ role: message.role,
+    const sourceHash = hash(stableJson({ exportOptions, title: snapshot.title, messages: snapshot.messages.map(message => ({ role: message.role, ...(message.kind ? { kind: message.kind } : {}),
       parts: message.parts.map(part => part.type === 'text' ? { ...part, text: normalizeBody(part.text) } : part) })) }));
     const oldTarget = this.state.conversations[snapshot.conversationId];
     const old = oldTarget ? this.state.notes[oldTarget.noteId] : undefined;
@@ -192,7 +198,7 @@ export class InboxWriter {
       } while (await this.store.read(path) !== null);
     }
     const assetPaths = await this.assets(snapshot, path, assetBytes, action === 'updated' || action === 'unchanged' ? old : undefined);
-    const body = renderConversation({ title: snapshot.title, sourceUrl: snapshot.sourceUrl, messages, assets: assetPaths });
+    const body = renderConversation({ title: snapshot.title, sourceUrl: snapshot.sourceUrl, messages, assets: assetPaths, options: exportOptions });
     const prefix = before !== null ? splitMarkdown(before).prefix :
       `---\nsource: chatgpt\nconversation_id: ${JSON.stringify(snapshot.conversationId)}\nsource_url: ${JSON.stringify(snapshot.sourceUrl)}\nai_inbox_id: ${JSON.stringify(noteId)}\ncaptured_at: ${JSON.stringify(snapshot.capturedAt)}\n---\n\n`;
     const after = action === 'unchanged' ? before! : prefix + body;

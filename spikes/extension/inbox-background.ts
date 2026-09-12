@@ -1,3 +1,4 @@
+import { ExportOptions } from '../shared/export-options';
 import { z } from 'zod';
 import { Snapshot } from '../core/schema';
 import { ProbeError } from '../shared/errors';
@@ -33,6 +34,11 @@ async function openStatus(tabId?: number) {
 async function prepare(tabId: number, pageUrl: string, connection: Connection): Promise<Job> {
   const id = new URL(pageUrl).pathname.split('/')[2]!;
   const revision = z.object({ revision: z.number().int().nonnegative() }).parse(await receiver(connection, `v1/conversations/${id}`)).revision;
+  const exportOptions = await receiver(connection, 'v1/export-options').catch(error => {
+    if (error instanceof ProbeError && error.code === 'NOT_FOUND') throw new ProbeError('PLUGIN_UPDATE_REQUIRED', 'Update the Obsidian plugin');
+    throw error;
+  }).then(value => ExportOptions.parse(value));
+  await chrome.scripting.executeScript({ target: { tabId }, func: includeThinking => { globalThis.aiInboxCaptureOptions = { includeThinking }; }, args: [exportOptions.includeThinking] });
   await chrome.scripting.executeScript({ target: { tabId }, files: ['inbox-capture.js'] });
   const deadline = Date.now() + 15 * 60 * 1000;
   let captureId = '';
@@ -55,7 +61,7 @@ async function prepare(tabId: number, pageUrl: string, connection: Connection): 
     const state = globalThis.aiInboxCapture; return state?.id === expectedId && location.href === state.pageUrl ? state.snapshot : null;
   }, args: [captureId] });
   const snapshot = Snapshot.parse(payload[0]?.result);
-  const job: Job = { tabId, pageUrl, vaultId: connection.vaultId, request: { requestId: crypto.randomUUID(), expectedRevision: revision, snapshot }, bytes: {} };
+  const job: Job = { tabId, pageUrl, vaultId: connection.vaultId, request: { requestId: crypto.randomUUID(), expectedRevision: revision, snapshot, exportOptions }, bytes: {} };
   await feedback(tabId, { stage: 'transferring', count: 0, total: snapshot.assets.length });
   for (const [index, asset] of snapshot.assets.entries()) {
     const bytes = new Uint8Array(asset.byteLength);
@@ -132,7 +138,7 @@ async function save(tab: chrome.tabs.Tab) {
   } catch (error) {
     const code = error instanceof ProbeError ? error.code : connected ? 'CONNECTION_OR_SAVE_FAILED' : 'OBSIDIAN_UNAVAILABLE';
     // These codes explicitly certify that no note commit took place.
-    if (['REVISION_CONFLICT', 'REPLAN_REQUIRED', 'SNAPSHOT_INVALID', 'ASSET_MANIFEST_MISMATCH'].includes(code)) await jobStore(queued?.tabId ?? tabId, 'delete').catch(() => undefined);
+    if (['REVISION_CONFLICT', 'REPLAN_REQUIRED', 'SNAPSHOT_INVALID', 'ASSET_MANIFEST_MISMATCH', 'EXPORT_SETTINGS_CHANGED', 'EXTENSION_UPDATE_REQUIRED'].includes(code)) await jobStore(queued?.tabId ?? tabId, 'delete').catch(() => undefined);
     const details = error instanceof CaptureFailure ? { notSubmitted: true, ...(error.diagnostics ? { diagnostics: error.diagnostics } : {}) } : {};
     await feedback(tabId, { stage: 'error', code, ...details }, !began && code !== 'CONNECTION_REQUIRED').catch(() => undefined);
     // Finish feedback while the chat is still active. Opening the chooser

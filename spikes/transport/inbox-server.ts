@@ -45,6 +45,7 @@ export async function startInboxServer(options: { token: string; vaultId: string
         reply(401, { code: 'UNAUTHORIZED' }); return;
       }
       if (route === 'GET /v1/hello') reply(200, { protocolVersion: 1, vaultId: options.vaultId, vaultName: options.vaultName });
+      else if (route === 'GET /v1/export-options') reply(200, options.writer.exportOptions());
       else if (/^GET \/v1\/conversations\/[A-Za-z0-9-]{1,128}$/.test(route)) {
         await options.writer.ready(); reply(200, { revision: options.writer.revision(request.url!.split('/').at(-1)!) });
       } else if (/^GET \/v1\/requests\/[a-f0-9-]{36}$/.test(route)) {
