@@ -1,0 +1,9 @@
+{
+  "id": "ai-inbox",
+  "name": "AI Inbox",
+  "version": "0.2.0",
+  "minAppVersion": "1.12.0",
+  "description": "Save complete ChatGPT conversations and local images while preserving your edits.",
+  "author": "elfmedy",
+  "isDesktopOnly": true
+}
