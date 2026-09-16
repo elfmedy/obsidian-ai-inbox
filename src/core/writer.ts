@@ -1,3 +1,4 @@
+import { conversationKey } from '../shared/providers';
 import { DEFAULT_EXPORT_OPTIONS, ExportOptions, type ExportOptionsData } from '../shared/export-options';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -158,7 +159,8 @@ export class InboxWriter {
     if (!request.exportOptions && exportOptions.includeThinking) fail('EXTENSION_UPDATE_REQUIRED');
     const snapshot = { ...request.snapshot, messages: request.snapshot.messages.filter(message => exportOptions.includeThinking || message.kind !== 'thinking') };
     if (!snapshot.messages.some(message => message.kind !== 'thinking')) fail('EMPTY_GRAPH');
-    if (request.expectedRevision !== this.revision(snapshot.conversationId)) fail('REVISION_CONFLICT');
+    const key = conversationKey(snapshot.provider ?? 'chatgpt', snapshot.conversationId);
+    if (request.expectedRevision !== this.revision(key)) fail('REVISION_CONFLICT');
     const assetBytes = await this.assetBytes(snapshot);
     const messages = snapshot.messages.map(message => ({ ...message, ...(message.kind === 'thinking' ? { sourceKind: 'thinking' as const } : {}), parts: message.parts.map(part => part.type === 'image'
       ? { type: 'image' as const, pointer: `ai-inbox-asset:${part.sha256}`, ...(part.alt ? { alt: part.alt } : {}) } : part) }));
@@ -166,7 +168,7 @@ export class InboxWriter {
     if (manifest.some(asset => !assetBytes.has(asset.reference.slice('ai-inbox-asset:'.length))) || manifest.length !== assetBytes.size) fail('ASSET_MANIFEST_MISMATCH');
     const sourceHash = hash(stableJson({ exportOptions, title: snapshot.title, messages: snapshot.messages.map(message => ({ role: message.role, ...(message.kind ? { kind: message.kind } : {}),
       parts: message.parts.map(part => part.type === 'text' ? { ...part, text: normalizeBody(part.text) } : part) })) }));
-    const oldTarget = this.state.conversations[snapshot.conversationId];
+    const oldTarget = this.state.conversations[key];
     const old = oldTarget ? this.state.notes[oldTarget.noteId] : undefined;
     const located = old ? await this.locate(old) : null;
     let assetModified = false;
@@ -197,9 +199,9 @@ export class InboxWriter {
     const assetPaths = await this.assets(snapshot, path, assetBytes, action === 'updated' || action === 'unchanged' ? old : undefined);
     const body = renderConversation({ title: snapshot.title, sourceUrl: snapshot.sourceUrl, messages, assets: assetPaths, options: exportOptions });
     const prefix = before !== null ? splitMarkdown(before).prefix :
-      `---\nsource: chatgpt\nconversation_id: ${JSON.stringify(snapshot.conversationId)}\nsource_url: ${JSON.stringify(snapshot.sourceUrl)}\nai_inbox_id: ${JSON.stringify(noteId)}\ncaptured_at: ${JSON.stringify(snapshot.capturedAt)}\n---\n\n`;
+      `---\nsource: ${snapshot.provider ?? 'chatgpt'}\nconversation_id: ${JSON.stringify(snapshot.conversationId)}\nsource_url: ${JSON.stringify(snapshot.sourceUrl)}\nai_inbox_id: ${JSON.stringify(noteId)}\ncaptured_at: ${JSON.stringify(snapshot.capturedAt)}\n---\n\n`;
     const after = action === 'unchanged' ? before! : prefix + body;
-    const note: Note = { noteId, conversationId: snapshot.conversationId, path, sourceHash,
+    const note: Note = { noteId, conversationId: key, path, sourceHash,
       bodyHash: hash(normalizeBody(splitMarkdown(after).body)), assets: [...assetPaths].map(([key, assetPath]) => ({ sha256: key.slice('ai-inbox-asset:'.length), path: assetPath })) };
     const receipt: SaveReceipt = { requestId: request.requestId, action, noteId, path,
       revision: request.expectedRevision + 1, messages: messages.length, images: assetPaths.size };

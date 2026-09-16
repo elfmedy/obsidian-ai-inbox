@@ -38,6 +38,7 @@ describe('alpha loopback protocol', () => {
       expect((await fetch(`${endpoint}/v1/export-options`)).status).toBe(401);
       expect(await (await fetch(`${endpoint}/v1/export-options`, { headers })).json()).toEqual({ includeThinking: false, includeTitle: false, language: 'zh' });
       expect((await fetch(`${endpoint}/v1/hello`)).status).toBe(401);
+      expect(await (await fetch(`${endpoint}/v1/hello`, { headers })).json()).toMatchObject({ providers: ['chatgpt', 'gemini', 'claude'] });
       expect((await fetch(`${endpoint}/v1/hello`, { headers: { ...headers, Origin: 'https://chatgpt.com' } })).status).toBe(403);
       const wrongHostStatus = await new Promise<number | undefined>((resolve, reject) => {
         httpRequest(`${endpoint}/v1/hello`, { headers: { ...headers, Host: 'evil.example' } }, response => {
@@ -56,6 +57,14 @@ describe('alpha loopback protocol', () => {
       expect(await (await fetch(`${endpoint}/v1/requests/${data.requestId}`, { headers })).json()).toEqual({ receipt });
       expect((await save({ ...data, requestId: randomUUID() })).status).toBe(409);
       expect((await save({ ...data, requestId: randomUUID(), expectedRevision: 1, path: '../outside.md' })).status).toBe(422); expect(files.size).toBe(1);
+      for (const provider of ['gemini', 'claude']) {
+        const sourceUrl = `https://${provider === 'gemini' ? 'gemini.google.com/app' : 'claude.ai/chat'}/sample`;
+        expect(await (await fetch(`${endpoint}/v1/conversations/${provider}/sample`, { headers })).json()).toEqual({ revision: 0 });
+        expect((await save({ ...data, requestId: randomUUID(), snapshot: { ...data.snapshot, provider, sourceUrl } })).status).toBe(200);
+        expect(await (await fetch(`${endpoint}/v1/conversations/${provider}/sample`, { headers })).json()).toEqual({ revision: 1 });
+      }
+      expect(files.size).toBe(3);
+      expect(await (await fetch(`${endpoint}/v1/conversations/sample`, { headers })).json()).toEqual({ revision: 1 });
     } finally { await server.close(); }
   });
 });

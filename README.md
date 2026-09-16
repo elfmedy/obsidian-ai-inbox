@@ -1,10 +1,8 @@
 <p align="center"><img src="docs/assets/ai-inbox.svg" width="64" height="64" alt="AI Inbox"></p>
 <h1 align="center">AI Inbox for Obsidian</h1>
-<p align="center"><strong>Keep your ChatGPT conversations in your notes.</strong></p>
+<p align="center"><strong>Keep your AI conversations in your notes.</strong></p>
 <p align="center">Save conversations and images as editable Markdown, with the companion browser extension.</p>
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a><br><a href="#features">Features</a> · <a href="#install">Install</a> · <a href="https://github.com/elfmedy/browser-ai-inbox">Browser extension</a></p>
-
-![A saved example conversation in Obsidian.](docs/assets/note-preview.png)
 
 ## Features
 
@@ -13,6 +11,8 @@
 - **Keep your edits.** Save again to update an untouched note. If you edited its body, AI Inbox creates a dated copy.
 - **Choose the content.** Thinking summaries and the extra title inside the note are optional; both default to off.
 - **Use your language.** Follow Obsidian, or choose English or simplified Chinese.
+
+Gemini and Claude support ordinary text/image chats. Canvas, Artifacts, non-image attachments, and histories that unload messages while scrolling are not yet supported. See the [guide](docs/guide.md) for boundaries.
 
 ## Install
 
@@ -33,7 +33,7 @@ Download `main.js` and `manifest.json` from the [latest release](https://github.
 ## Start saving
 
 1. Keep your destination vault open in Obsidian.
-2. Open a ChatGPT conversation in Chrome or Edge, wait for the reply to finish, and click **AI Inbox**.
+2. Open a ChatGPT, Gemini, or Claude conversation in Chrome or Edge, wait for the reply to finish, and click **AI Inbox**.
 3. Confirm the first connection in Obsidian. Your conversation appears in **AI Inbox/**.
 
 With multiple vaults, choose a destination once to make it the default. Right-click the browser extension icon to switch later. If Obsidian or the default vault is closed, saving fails with a clear message.
@@ -46,7 +46,7 @@ Settings apply on the next save; existing notes are not rewritten in bulk. See t
 
 ## Updates
 
-Update this plugin through BRAT. Update the [browser extension](https://github.com/elfmedy/browser-ai-inbox/releases/latest) separately; release notes say when both sides need an update. Version **0.4.0** works with browser extension **0.3.0+**.
+Update this plugin through BRAT. Update the [browser extension](https://github.com/elfmedy/browser-ai-inbox/releases/latest) separately; release notes say when both sides need an update. Use browser extension **0.5.0+** for Gemini, Claude and the thinking-panel fix. Older 0.3.0+ extensions can still save ChatGPT.
 
 The browser project moved to its own repository in 0.4.0. Existing BRAT installations keep the same repository and plugin ID.
 

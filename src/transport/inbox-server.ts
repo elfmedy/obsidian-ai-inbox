@@ -1,3 +1,4 @@
+import { conversationKey, type Provider } from '../shared/providers';
 import { createServer, type IncomingMessage } from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -44,10 +45,13 @@ export async function startInboxServer(options: { token: string; vaultId: string
       if (!timingSafeEqual(auth, createHash('sha256').update(request.headers.authorization ?? '').digest()) || request.headers['x-ai-inbox-vault'] !== options.vaultId) {
         reply(401, { code: 'UNAUTHORIZED' }); return;
       }
-      if (route === 'GET /v1/hello') reply(200, { protocolVersion: 1, vaultId: options.vaultId, vaultName: options.vaultName });
+      if (route === 'GET /v1/hello') reply(200, { protocolVersion: 1, providers: ['chatgpt', 'gemini', 'claude'], vaultId: options.vaultId, vaultName: options.vaultName });
       else if (route === 'GET /v1/export-options') reply(200, options.writer.exportOptions());
       else if (/^GET \/v1\/conversations\/[A-Za-z0-9-]{1,128}$/.test(route)) {
         await options.writer.ready(); reply(200, { revision: options.writer.revision(request.url!.split('/').at(-1)!) });
+      } else if (/^GET \/v1\/conversations\/(gemini|claude)\/[A-Za-z0-9_-]{1,128}$/.test(route)) {
+        const parts = request.url!.split('/');
+        await options.writer.ready(); reply(200, { revision: options.writer.revision(conversationKey(parts[3] as Provider, parts[4]!)) });
       } else if (/^GET \/v1\/requests\/[a-f0-9-]{36}$/.test(route)) {
         await options.writer.ready(); reply(200, { receipt: options.writer.status(request.url!.split('/').at(-1)!) });
       } else if (/^PUT \/v1\/assets\/[a-f0-9]{64}$/.test(route)) {

@@ -35,6 +35,22 @@ function request(revision = 0, text = 'Original'): SaveRequestData {
     messages: [{ id: 'message-1', role: 'user', parts: [{ type: 'text', text }] }], assets: [] } };
 }
 describe('durable save policy', () => {
+  it('keeps provider identities separate and continues legacy ChatGPT notes after restart', async () => {
+    const vault = new MemoryVault(); let writer = new InboxWriter(vault, null);
+    const legacy = await writer.save(request());
+    for (const provider of ['gemini', 'claude'] as const) {
+      const data = request(); data.snapshot.provider = provider;
+      data.snapshot.sourceUrl = `https://${provider === 'gemini' ? 'gemini.google.com/app' : 'claude.ai/chat'}/chat-1`;
+      data.snapshot.messages[0]!.role = 'assistant';
+      const saved = await writer.save(data);
+      expect(saved.path).not.toBe(legacy.path); expect(vault.files.get(saved.path)).toContain(`source: ${provider}`);
+      expect(vault.files.get(saved.path)).toContain(`## ${provider === 'gemini' ? 'Gemini' : 'Claude'}`);
+      expect(writer.revision(`${provider}:chat-1`)).toBe(1);
+    }
+    writer = new InboxWriter(vault, vault.state);
+    const update = await writer.save(request(1, 'Changed legacy content'));
+    expect(update.path).toBe(legacy.path); expect(update.action).toBe('updated'); expect(vault.files.size).toBe(3);
+  });
   it.each(['', 'Attachments', './', './images'])('uses attachment setting %j relative to the saved note', async folder => {
     const vault = new MemoryVault(); vault.attachmentFolder = folder;
     const writer = new InboxWriter(vault, null); const data = request();

@@ -1,10 +1,8 @@
 <p align="center"><img src="docs/assets/ai-inbox.svg" width="64" height="64" alt="AI Inbox"></p>
 <h1 align="center">AI Inbox · Obsidian 插件</h1>
-<p align="center"><strong>把 ChatGPT 对话，留在你的笔记里。</strong></p>
+<p align="center"><strong>把 AI 对话，留在你的笔记里。</strong></p>
 <p align="center">配合浏览器扩展，将完整对话和图片保存为可编辑的 Markdown。</p>
 <p align="center"><a href="README.md">English</a> · 简体中文<br><a href="#功能">功能</a> · <a href="#安装">安装</a> · <a href="https://github.com/elfmedy/browser-ai-inbox/blob/main/README.zh-CN.md">浏览器扩展</a></p>
-
-![在 Obsidian 中查看保存后的示例对话。](docs/assets/note-preview.png)
 
 ## 功能
 
@@ -13,6 +11,8 @@
 - **保留你的修改。** 再次保存时更新未编辑的笔记；正文改过则另存带日期时间的新笔记。
 - **内容按需保留。** 可选择是否保存思考摘要、是否在正文额外显示对话标题，两项默认关闭。
 - **使用熟悉的语言。** 默认跟随 Obsidian，也可选择简体中文或 English。
+
+Gemini、Claude 支持普通文字和图片聊天；Canvas、Artifacts、非图片附件，以及滚动时卸载消息的历史暂不支持。具体边界见[使用指南](docs/guide.zh-CN.md)。
 
 ## 安装
 
@@ -33,7 +33,7 @@
 ## 开始使用
 
 1. 保持目标 Obsidian 仓库打开。
-2. 在 Chrome 或 Edge 中打开 ChatGPT 聊天，等待回复完成，点击 **AI Inbox** 图标。
+2. 在 Chrome 或 Edge 中打开 ChatGPT、Gemini 或 Claude 聊天，等待回复完成，点击 **AI Inbox** 图标。
 3. 首次在 Obsidian 中确认连接，对话会保存到 **AI Inbox/**。
 
 多个仓库时，选择一次即成为默认；之后可以右键浏览器扩展图标切换。Obsidian 或默认仓库未打开时，会提示保存失败。
@@ -46,7 +46,7 @@
 
 ## 更新
 
-Obsidian 插件通过 BRAT 更新，[浏览器扩展](https://github.com/elfmedy/browser-ai-inbox/releases/latest)单独更新；需要两端同时升级时，Release 会明确说明。**0.4.0** 兼容浏览器扩展 **0.3.0 及以上版本**。
+Obsidian 插件通过 BRAT 更新，[浏览器扩展](https://github.com/elfmedy/browser-ai-inbox/releases/latest)单独更新；需要两端同时升级时，Release 会明确说明。Gemini、Claude 及思考面板修复需要浏览器扩展 **0.5.0 及以上版本**。旧版 0.3.0 及以上扩展仍可保存 ChatGPT。
 
 从 0.4.0 起，浏览器工程迁入独立仓库；已有 BRAT 安装继续使用原仓库地址和插件 ID。
 

@@ -1,3 +1,4 @@
+import { conversationLocation, PROVIDER_NAMES } from '../shared/providers';
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptionsData } from '../shared/export-options';
 import type { GraphMessage } from '../shared/message';
 import { ProbeError } from '../shared/errors';
@@ -24,9 +25,9 @@ export function imageManifest(messages: readonly GraphMessage[]) {
  * or mutable properties here. The eventual writer owns frontmatter and policy. */
 export function renderConversation(input: { title: string; sourceUrl: string; messages: readonly GraphMessage[];
   assets: ReadonlyMap<string, string>; options?: ExportOptionsData }): string {
-  const source = new URL(input.sourceUrl);
-  if (source.origin !== 'https://chatgpt.com' || !/^\/c\/[A-Za-z0-9-]+\/?$/.test(source.pathname) ||
-      source.search || source.hash || source.username || source.password) throw new ProbeError('SOURCE_URL_INVALID', 'Expected a current ChatGPT conversation URL');
+  const source = conversationLocation(input.sourceUrl);
+  if (!source || source.url !== input.sourceUrl) throw new ProbeError('SOURCE_URL_INVALID', 'Expected a supported conversation URL');
+  const providerName = PROVIDER_NAMES[source.provider];
   if (!input.messages.length) throw new ProbeError('EMPTY_GRAPH', 'No messages to render');
   const title = input.title.replace(/[\r\n]+/g, ' ').replace(/[\\`*_{}[\]()#+.!<>|]/g, '\\$&');
   const options = input.options ?? DEFAULT_EXPORT_OPTIONS;
@@ -39,7 +40,7 @@ export function renderConversation(input: { title: string; sourceUrl: string; me
       return localImage(path, part.alt);
     }).join('\n\n');
     if (message.sourceKind === 'thinking') return `> [!note]- ${zh ? '思考' : 'Thinking'}\n${content.split('\n').map(line => `> ${line}`).join('\n')}`;
-    return `## ${message.role === 'user' ? (zh ? '用户' : 'User') : 'ChatGPT'}\n\n${content}`;
+    return `## ${message.role === 'user' ? (zh ? '用户' : 'User') : providerName}\n\n${content}`;
   });
-  return `${options.includeTitle ? `# ${title}\n\n` : ''}${zh ? '来源' : 'Source'}: [ChatGPT](${source.href})\n\n${sections.join('\n\n---\n\n')}\n`;
+  return `${options.includeTitle ? `# ${title}\n\n` : ''}${zh ? '来源' : 'Source'}: [${providerName}](${source.url})\n\n${sections.join('\n\n---\n\n')}\n`;
 }

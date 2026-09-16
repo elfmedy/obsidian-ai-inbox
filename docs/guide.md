@@ -2,7 +2,13 @@
 
 ## What gets saved
 
-AI Inbox saves the complete **current branch** of an ordinary ChatGPT conversation. Regenerated alternatives outside that branch are not combined into the note. Save after the reply finishes. Code, supported mathematics and citations are preserved; downloaded images use local paths. Other attachment types and unsupported response formats may stop a save with an explanation.
+AI Inbox saves the complete **current branch** of an ordinary ChatGPT, Gemini, or Claude conversation. Regenerated alternatives outside that branch are not combined into the note. Save after the reply finishes. Code, supported mathematics and citations are preserved; downloaded images use local paths. Other attachment types and unsupported response formats may stop a save with an explanation.
+
+## Provider boundaries
+
+Gemini and Claude support ordinary conversation pages. The extension loads older messages and checks stable content before saving. Claude also checks the page's message positions and total. Gemini's boundary check uses the settled top of the page; very long histories still need real-account validation. Histories that unload rows during scrolling fail explicitly. Canvas, standalone Artifacts, non-image attachments and unrecognized rich content are not silently reduced to text.
+
+Thinking export includes recognized user-visible summaries only. Raw hidden reasoning and tool results are excluded. If a requested summary cannot be read, the save stops; turn off thinking export to save the ordinary answer.
 
 ## Saving again
 
@@ -23,13 +29,13 @@ Images follow Obsidian's default attachment location, including the note's folde
 
 Both components must run on the same computer. The receiver binds only to `127.0.0.1`. The first connection requires approval in Obsidian. Choose a default vault once; use the extension's settings to switch it. A closed default vault does not silently redirect a save to another vault.
 
-The browser reads the current ChatGPT conversation and downloads its images when you save. ChatGPT requests use the signed-in page session; AI Inbox has no hosted sync service or telemetry. Notes and images go to your local vault. Browser settings retain pairing information. An already-started save with an uncertain result may retain its pending request and image bytes locally until a retry confirms the result; this is not an offline capture queue. If Obsidian is unavailable before capture, saving fails immediately.
+The browser reads the current ChatGPT, Gemini, or Claude conversation and downloads its images when you save. ChatGPT requests use the signed-in page session. Gemini and Claude read the loaded chat page and scroll to load older messages; AI Inbox has no hosted sync service or telemetry. Notes and images go to your local vault. Browser settings retain pairing information. An already-started save with an uncertain result may retain its pending request and image bytes locally until a retry confirms the result; this is not an offline capture queue. If Obsidian is unavailable before capture, saving fails immediately.
 
 ## Troubleshooting
 
 - **Cannot connect:** open the intended Obsidian vault and enable AI Inbox. Check whether a firewall or proxy blocks local connections.
 - **Need another vault:** right-click the extension icon and choose **Switch vault / Settings**.
-- **Conversation changed or not fully loaded:** refresh ChatGPT, wait for the complete reply, then save again.
+- **Conversation changed or not fully loaded:** refresh the chat page, wait for the complete reply, then save again.
 - **Result not confirmed:** keep the original vault open and retry. AI Inbox checks an existing receipt before resubmitting.
 - **Unsupported content:** copy the diagnostic report for an issue. Do not include connection tokens or private conversation text.
 - **Repeated old extension error:** reload the updated extension, clear old error entries, and check for new entries.
@@ -38,6 +44,6 @@ The browser reads the current ChatGPT conversation and downloads its images when
 
 This is an Alpha release, primarily tested on Windows with Obsidian 1.13.7. The manifest requires Obsidian 1.12.0+. Ordinary chats and uploaded images have been exercised; very long histories, generated images, and all ChatGPT branch variants do not yet have comprehensive real-account coverage. Chrome and Edge use the same Chromium extension package. Mobile Obsidian, Firefox and Safari are not supported.
 
-The two components use protocol version 1 and can be updated independently while compatible. Both 0.4.0 components accept their 0.3.0+ companion. Future breaking changes will list the required companion version in the release notes.
+The two components use protocol version 1 and can be updated independently while compatible. Gemini and Claude require both components at 0.5.0+. Legacy ChatGPT clients and note indexes remain compatible. Future breaking changes will list the required companion version in the release notes.
 
 [Companion project](https://github.com/elfmedy/browser-ai-inbox) · [Home](../README.md)
