@@ -3,6 +3,7 @@ import { mathFromMarkdown } from 'mdast-util-math';
 import { math } from 'micromark-extension-math';
 import { isRecord, ProbeError } from '../shared/errors';
 import { transformContentReferences } from './citations-upstream';
+import { adaptRichLayout } from './rich-layout';
 
 export interface ContentReferenceSource { title?: string; url?: string; attribution?: string; supporting_websites?: ContentReferenceSource[]; }
 export interface ContentReference extends ContentReferenceSource {
@@ -53,6 +54,7 @@ export function readReferences(metadata: unknown): ContentReference[] {
 
 export function expandCitations(input: string, references: ContentReference[] = [], includeSources = true): string {
   if (input.length > 2 * 1024 * 1024) throw new ProbeError('LIMIT_EXCEEDED', 'Markdown block too large');
+  input = adaptRichLayout(input);
   // Exclude code and TeX: quoted marker examples must not be rewritten.
   const tree = fromMarkdown(input, { extensions: [math()], mdastExtensions: [mathFromMarkdown()] });
   const protectedRanges: Array<[number, number]> = [];
@@ -81,9 +83,9 @@ export function expandCitations(input: string, references: ContentReference[] = 
  * Only called outside the original code/TeX ranges; never invent source URLs.
  */
 function retainUnresolvedMarkers(input: string): string {
-  return input.replace(/\uE200([^\uE200\uE201]*)\uE201|[\uE200-\uE204]/gu, (raw: string, payload: string | undefined) => {
+  return input.replace(/<Cite\s+(?:ref\s*=\s*["'][^"'<>\r\n]+["']|refs\s*=\s*\{\s*\[[^<>\r\n]*\]\s*\})\s*\/>|\uE200([^\uE200\uE201]*)\uE201|[\uE200-\uE204]/gu, (raw: string, payload: string | undefined) => {
     if (raw.length > 16384) throw new ProbeError('LIMIT_EXCEEDED', 'Citation marker too large');
-    const label = payload?.startsWith('cite\uE202') ? '引用未解析' : 'ChatGPT 标记未解析';
+    const label = raw.startsWith('<Cite') || payload?.startsWith('cite\uE202') ? '引用未解析' : 'ChatGPT 标记未解析';
     // Literal Unicode escapes retain the exact original marker, including its
     // boundaries, while remaining readable in Obsidian and plain Markdown.
     const literal = raw.replace(/[\uE200-\uE204]/gu, character => `\\u${character.charCodeAt(0).toString(16).toUpperCase()}`)

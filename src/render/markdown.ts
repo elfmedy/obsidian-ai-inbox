@@ -4,6 +4,7 @@ import { gfm } from 'micromark-extension-gfm';
 import { mathFromMarkdown } from 'mdast-util-math';
 import { math } from 'micromark-extension-math';
 import { ProbeError } from '../shared/errors';
+import { adaptRichLayout } from './rich-layout';
 
 interface Node {
   type: string; children?: Node[] | undefined; url?: string | undefined; identifier?: string | undefined; alt?: string | null | undefined;
@@ -26,6 +27,7 @@ export function localImage(path: string, alt = ''): string {
 /** Use upstream CommonMark/GFM/TeX parsers to locate edits, keeping all other
  * source bytes intact: do not serialize the tree and reformat the conversation. */
 export function inspectMarkdown(input: string) {
+  input = adaptRichLayout(input);
   if (input.length > 2 * 1024 * 1024) throw new ProbeError('LIMIT_EXCEEDED', 'Markdown block too large');
   const all = nodes(fromMarkdown(input, { extensions: [gfm(), math()], mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()] }));
   const definitions = new Map<string, string>();
@@ -53,13 +55,14 @@ export function inspectMarkdown(input: string) {
       if (escaped !== raw) literalEdits.push({ start, end, value: escaped });
     }
   }
-  return { images, literalEdits };
+  return { images, literalEdits, markdown: input };
 }
 
 /** Canonicalize image destinations before durable browser storage. Reference
  * definitions shared with ordinary links need a dedicated adapter. */
 export function canonicalizeImages(input: string, digests: ReadonlyMap<string, string>): string {
   const parsed = inspectMarkdown(input);
+  input = parsed.markdown;
   const all = nodes(fromMarkdown(input, { extensions: [gfm(), math()], mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()] }));
   const edits: Edit[] = parsed.images.map(image => {
     const digest = digests.get(image.reference);
@@ -81,6 +84,7 @@ export function canonicalizeImages(input: string, digests: ReadonlyMap<string, s
 
 export function localizeMarkdown(input: string, assets: ReadonlyMap<string, string>): string {
   const parsed = inspectMarkdown(input);
+  input = parsed.markdown;
   const edits: Edit[] = [...parsed.literalEdits, ...parsed.images.map(image => {
     const path = assets.get(image.reference);
     if (!path) throw new ProbeError('IMAGE_NOT_LOCAL', 'Required image has no verified local asset');

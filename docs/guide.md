@@ -21,6 +21,8 @@ Existing frontmatter is preserved on updates. Concurrent edits or uncertain sour
 
 ## Content and attachments
 
+Supported ChatGPT cards, columns and flow layouts are converted to Markdown in reading order, retaining text, code, images and directional arrows. Colors and side-by-side styling are not retained. Citations become links when source metadata is available; unresolved citations keep their original marker with an explicit label. Unknown HTML or components still stop the save.
+
 In Obsidian **Settings → AI Inbox**, choose the note directory and language. **Save thinking content** exports recognized expanded thinking summaries in a collapsed callout; it is off by default. **Show conversation title in note** controls only the extra generated title and is also off by default. The filename and headings inside replies remain.
 
 Images follow Obsidian's default attachment location, including the note's folder or a subfolder. Changing that setting applies to newly stored images; it does not relocate existing attachments. Chat text is never translated by the language setting.
