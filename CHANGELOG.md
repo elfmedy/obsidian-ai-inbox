@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2
+
+- Support ChatGPT text alignment and sizing attributes, captions, and literal Link components.
+- Preserve SVG diagrams and template loops as clearly labelled, inert source blocks so they no longer block conversation saves.
+- Keep code examples, link validation, image checks and the final API recheck intact.
+- 修复更多 ChatGPT 布局属性、说明文字、链接和 SVG 图示触发 HTML 不支持的问题；SVG 明确保留为源码块，暂不渲染。
+
 ## 0.5.1
 
 - Convert supported ChatGPT cards, columns and flow layouts to Markdown while preserving text, code, images and arrows.

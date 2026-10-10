@@ -2,9 +2,12 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import { mathFromMarkdown } from 'mdast-util-math';
 import { math } from 'micromark-extension-math';
 import { ProbeError } from '../shared/errors';
+import { formatCitationSource } from './citations-upstream';
+import { fencedSvgSource, svgSourceEnd } from './svg-source';
 
 const containers = new Set(['grid', 'grid-item', 'box', 'row']);
-const attributes = new Set(['columns', 'gap', 'border', 'radius', 'padding', 'background', 'align', 'justify', 'color', 'size', 'weight', 'name']);
+const attributes = new Set(['columns', 'gap', 'border', 'radius', 'padding', 'background', 'align', 'justify', 'color', 'size', 'weight', 'name',
+  'textAlign', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight']);
 const arrows: Readonly<Record<string, string>> = { 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→' };
 const unsupported = () => new ProbeError('HTML_CONTENT_REQUIRES_ADAPTER', 'HTML needs a verified content adapter');
 
@@ -13,7 +16,7 @@ interface Tag { name: string; closing: boolean; selfClosing: boolean; end: numbe
 /** Read a deliberately small, inert JSX-like vocabulary. Attribute expressions
  * are balanced strings, never JavaScript; unknown/behavioural attributes fail. */
 function readTag(input: string, start: number): Tag | undefined {
-  const head = /^<(\/)?(grid-item|grid|box|row|text|icon)(?=[\s/>])/.exec(input.slice(start));
+  const head = /^<(\/)?(grid-item|grid|box|row|text|caption|icon|Link)(?=[\s/>])/.exec(input.slice(start));
   if (!head) return undefined;
   let cursor = start + head[0].length;
   const values = new Map<string, string>();
@@ -25,8 +28,8 @@ function readTag(input: string, start: number): Tag | undefined {
       return { name: head[2]!, closing: !!head[1], selfClosing, end: cursor + (selfClosing ? 2 : 1), values };
     }
     if (!whitespace || head[1]) throw unsupported();
-    const key = /^[a-z][a-z-]*/.exec(input.slice(cursor))?.[0];
-    if (!key || !attributes.has(key) || values.has(key)) throw unsupported();
+    const key = /^[a-zA-Z][a-zA-Z-]*/.exec(input.slice(cursor))?.[0];
+    if (!key || !(head[2] === 'Link' ? ['url', 'title'].includes(key) : attributes.has(key)) || values.has(key)) throw unsupported();
     cursor += key.length;
     const afterKey = cursor + /^\s*/.exec(input.slice(cursor))![0].length;
     let value = '';
@@ -93,6 +96,9 @@ function containerEnd(input: string, start: number, name: string): { start: numb
     if (/^\${2,}\s*$/.test(trimmed)) { inMath = !inMath; continue; }
     if (inMath) continue;
     const offset = match.index + line.indexOf(trimmed);
+    if (/^<svg(?=[\s/>])/.test(trimmed)) {
+      lines.lastIndex = svgSourceEnd(input, offset); continue;
+    }
     const tag = readTag(input, offset);
     if (!tag || !containers.has(tag.name) || input.slice(tag.end, match.index + line.length).trim()) continue;
     if (tag.closing) {
@@ -111,15 +117,26 @@ function containerEnd(input: string, start: number, name: string): { start: numb
  * Unknown HTML is left for the existing fail-closed content/asset checks. */
 export function adaptRichLayout(input: string, depth = 0): string {
   if (input.length > 2 * 1024 * 1024 || depth > 32) throw new ProbeError('LIMIT_EXCEEDED', 'Rich content too large or deeply nested');
-  if (!/<\/?(?:grid|grid-item|box|row|text|icon)(?=[\s/>])/.test(input)) return input;
+  if (!/<\/?(?:grid|grid-item|box|row|text|caption|icon|Link|svg)(?=[\s/>])/.test(input)) return input;
   const protectedRanges = literalRanges(input);
-  const pattern = /<\/?(?:grid-item|grid|box|row|text|icon)(?=[\s/>])/g;
+  const pattern = /<\/?(?:grid-item|grid|box|row|text|caption|icon|Link|svg)(?=[\s/>])/g;
   let output = ''; let cursor = 0; let rangeIndex = 0;
   for (let match = pattern.exec(input); match; match = pattern.exec(input)) {
+    // Escaped examples are ordinary Markdown text, not presentation markup.
+    let backslashes = 0;
+    for (let index = match.index - 1; index >= 0 && input[index] === '\\'; index--) backslashes++;
+    if (backslashes % 2) continue;
     while (protectedRanges[rangeIndex] && protectedRanges[rangeIndex]![1] <= match.index) rangeIndex++;
     const range = protectedRanges[rangeIndex];
     if (range && range[0] <= match.index) { pattern.lastIndex = range[1]; continue; }
+    if (match[0] === '<svg') {
+      const end = svgSourceEnd(input, match.index);
+      const newline = input.includes('\r\n') ? '\r\n' : '\n';
+      output += input.slice(cursor, match.index) + newline + newline + fencedSvgSource(input.slice(match.index, end), newline) + newline + newline;
+      cursor = end; pattern.lastIndex = end; continue;
+    }
     const tag = readTag(input, match.index)!;
+    if (!tag) throw unsupported();
     if (tag.closing) throw unsupported();
     let replacement: string; let end = tag.end;
     if (containers.has(tag.name)) {
@@ -135,11 +152,23 @@ export function adaptRichLayout(input: string, depth = 0): string {
       const newline = input.includes('\r\n') ? '\r\n' : '\n';
       replacement = (prefix.trim() ? newline.repeat(Math.max(0, 2 - before)) : '') + content +
         (suffix.trim() ? newline.repeat(Math.max(0, 2 - after)) : ''); end = closing.end;
-    } else if (tag.name === 'text') {
+    } else if (tag.name === 'text' || tag.name === 'caption') {
       if (tag.selfClosing) throw unsupported();
-      const close = input.indexOf('</text>', tag.end);
+      const closingTag = `</${tag.name}>`;
+      const close = input.indexOf(closingTag, tag.end);
       if (close < 0 || input.slice(tag.end, close).includes('\n')) throw unsupported();
-      replacement = adaptRichLayout(input.slice(tag.end, close), depth + 1); end = close + 7;
+      replacement = adaptRichLayout(input.slice(tag.end, close), depth + 1); end = close + closingTag.length;
+    } else if (tag.name === 'Link') {
+      if (!tag.selfClosing) throw unsupported();
+      const url = quotedValue(tag.values.get('url')); const title = tag.values.has('title') ? quotedValue(tag.values.get('title')) : url;
+      let parsed: URL;
+      try { parsed = new URL(url); } catch { throw unsupported(); }
+      if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || url.includes('\\') ||
+        Array.from(url).some(char => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127)) throw unsupported();
+      // Titles are literal labels; angle brackets/backticks must not become
+      // markup when the normalized Markdown is inspected a second time.
+      const label = title.replace(/[<>`]/g, char => ({ '<': '&lt;', '>': '&gt;', '`': '&#96;' })[char]!);
+      replacement = formatCitationSource({ url, title: label }, 'markdown');
     } else {
       const value = tag.values.get('name');
       const iconName = value?.match(/^["']([a-z-]+)["']$/)?.[1];
@@ -149,4 +178,10 @@ export function adaptRichLayout(input: string, depth = 0): string {
     output += input.slice(cursor, match.index) + replacement; cursor = end; pattern.lastIndex = end;
   }
   return output + input.slice(cursor);
+}
+
+function quotedValue(value: string | undefined): string {
+  if (!value || !/^(?:"[^"\r\n]*"|'[^'\r\n]*')$/.test(value)) throw unsupported();
+  return value.slice(1, -1).replace(/&(?:amp|quot|apos|lt|gt);/g, entity =>
+    ({ '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>' })[entity]!);
 }

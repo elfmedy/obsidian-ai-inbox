@@ -28,6 +28,61 @@ const layout = [
 ].join('\n');
 
 describe('ChatGPT presentation component adapter', () => {
+  it('accepts sizing, text alignment, captions and literal Link components', () => {
+    const input = '<box width="100%" maxWidth={800} minHeight={20}>\n  <grid columns={2}>\n    <grid-item>\n      <box height="100%">\n        <text textAlign="center" size="2xs">**Overview**</text>\n        <caption>Example with `code`.</caption>\n        <Link url="https://example.org/doc?a=1&amp;b=2" title="A [guide]"/>\n      </box>\n    </grid-item>\n  </grid>\n</box>';
+    const output = localizeMarkdown(expandCitations(input), new Map());
+    expect(output).toContain('**Overview**'); expect(output).toContain('Example with `code`.');
+    expect(output).toContain('[A \\[guide\\]](<https://example.org/doc?a=1&b=2>)');
+    expect(output).not.toMatch(/<\/?(?:box|grid|text|caption|Link)/);
+    expect(adaptRichLayout(output)).toBe(output);
+  });
+
+  it.each([
+    '<Link url="javascript:alert(1)" title="unsafe"/>',
+    '<Link url="data:text/html,test"/>', '<Link url="https://user:pass@example.org"/>',
+    '<Link url={dynamicUrl}/>', '<Link url="https://example.org" onClick="run()"/>',
+    '<Link url="https://example.org" title={dynamicTitle}/>',
+    '<box textAlign="center" onClick="run()">\ntext\n</box>',
+  ])('rejects unsupported Link values and behavioural attributes: %s', input => {
+    expect(() => localizeMarkdown(input, new Map())).toThrow('HTML');
+  });
+
+  it('preserves complete static and template SVG islands as labelled inert source', () => {
+    const svg = '<svg viewBox="0 0 320 100" width="100%">\n  {#each [{x:5,label:"A"},{x:170,label:"B"}] as o}\n    <text x={o.x+40} textAnchor="middle" fontSize="12">{o.label}</text>\n    <path d={`M ${o.x+40} 40 v 20`} strokeWidth="1.6"/>\n  {/each}\n  <svg><path d="M0 0 L10 10"/></svg>\n</svg>';
+    const input = '<box>\n  **Diagram**\n\n' + svg.split('\n').map(line => '  ' + line).join('\n') + '\n\n  <caption>Two independent instances.</caption>\n</box>';
+    const output = expandCitations(input);
+    expect(output).toContain('SVG source (not rendered)');
+    expect(output).toContain('```text\n' + svg + '\n```');
+    expect(output).toContain('Two independent instances.');
+    expect(inspectMarkdown(output).images).toEqual([]);
+    expect(localizeMarkdown(output, new Map())).toBe(output);
+    expect(expandCitations(output)).toBe(output);
+  });
+
+  it('protects SVG boundaries and never activates markup, images, citations or embedded fences', () => {
+    const svg = '<svg>\n<!-- </svg> -->\n{ /* </svg> */ value: "</svg>" }\n<text>{`</svg>`}</text>\n```\n![example](https://example.org/private.png)\n<Cite ref="turn0search0"/>\n<script>example()</script>\n</svg>';
+    const output = expandCitations(svg);
+    expect(output).toContain('````text\n' + svg + '\n````');
+    expect(inspectMarkdown(output).images).toEqual([]);
+    expect(expandCitations(output)).toBe(output);
+    expect(() => localizeMarkdown(output, new Map())).not.toThrow();
+    expect(() => adaptRichLayout('<svg><text>unclosed</text>')).toThrow();
+  });
+
+  it('leaves component examples in code and math untouched', () => {
+    const input = '`<Link url="https://example.org"/>` and $<caption>x</caption>$\n\n```svg\n<svg><text textAnchor="middle">A</text></svg>\n```';
+    expect(expandCitations(input)).toBe(input);
+    const escaped = '\\<Link url="https://example.org"/> and \\<svg/> and \\<caption>text\\</caption>';
+    expect(localizeMarkdown(escaped, new Map())).toBe(escaped);
+  });
+
+  it('keeps markup-looking link titles literal on subsequent normalization passes', () => {
+    const input = '<Link url="https://example.org" title="&lt;box&gt; and `code`"/>';
+    const output = localizeMarkdown(input, new Map());
+    expect(output).toContain('&lt;box&gt; and &#96;code&#96;');
+    expect(localizeMarkdown(output, new Map())).toBe(output);
+  });
+
   it('flattens nested columns without losing code, Markdown or content order', () => {
     const output = adaptRichLayout(layout);
     expect(output).toContain('**Configuration**');

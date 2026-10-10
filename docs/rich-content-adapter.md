@@ -15,7 +15,9 @@ AI Inbox keeps API Markdown as the source and applies a narrow presentation adap
 ## Conversion boundary
 
 - Standalone, balanced `grid`, `grid-item`, `box`, and `row` containers become sequential Markdown blocks, preserving source order. Their contents lose only common layout indentation. Columns, colors and card styling are not reproduced.
-- Single-line `text` wrappers retain their Markdown contents. Known directional `icon` values become arrows.
+- Single-line `text` and `caption` wrappers retain their Markdown contents. Known directional `icon` values become arrows. Sizing and text-alignment presentation attributes are accepted.
+- Literal `Link` components become Markdown links after validating HTTP(S) URLs and escaping their labels. Dynamic link values are not evaluated.
+- SVG islands, including template expressions and loops, are retained as clearly labelled source code blocks. They are not rendered or executed; no SVG content is silently discarded. Nested SVG boundaries, quoted closing tags, comments and embedded Markdown fences are handled before processing the surrounding layout. Code examples remain unchanged.
 - Only known presentation attributes are accepted; their values are scanned as inert strings, never evaluated. Unknown attributes, unknown icons, malformed or excessively nested components stop the export.
 - Code, inline code and math examples remain literal. Ordinary Markdown outside adapted components is not serialized or reformatted.
 - After conversion, the existing Markdown parser discovers images, canonicalizes downloaded assets, and escapes source wiki links. Unknown HTML, including raw HTML images, still requires a separate adapter.
@@ -25,4 +27,4 @@ The same renderer and regression tests are maintained in both repositories. The 
 
 ## Verification
 
-Synthetic tests cover nested columns and diagrams, code indentation, CRLF preservation, literal markup in code/math, image discovery and localization, reference images, wiki links, resolved/unresolved citations, idempotence, malformed tags, unknown attributes, and bounded nesting. Browser integration tests cover the final API recheck and snapshot creation. Private or shared conversation bodies are not checked into fixtures.
+Synthetic tests cover nested columns and diagrams, code indentation, CRLF preservation, literal markup in code/math, image discovery and localization, reference images, wiki links, resolved/unresolved citations, idempotence, malformed tags, unknown attributes, bounded nesting, sizing/alignment attributes, captions, literal links, and SVG/template source preservation. Browser integration tests cover the final API recheck and snapshot creation. Private or shared conversation bodies are not checked into fixtures.
